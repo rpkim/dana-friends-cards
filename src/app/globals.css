@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #14121a;
+  --paper: #fff8ef;
+  --paper-2: #ffe8f0;
+  --sky: #c9ddff;
+}
+
+@theme inline {
+  --font-sans: var(--font-body);
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-body), "Nunito", sans-serif;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, #ffe56a 0%, transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, #ff9ac8 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, #2f6bff33 0%, transparent 55%),
+    linear-gradient(180deg, var(--paper), var(--sky) 55%, var(--paper-2));
+  background-attachment: fixed;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@keyframes card-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes soft-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-front,
+.card-back {
+  animation: soft-pop 0.55s ease-out both;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  header,
+  aside,
+  button {
+    display: none !important;
+  }
+}

@@ -1,0 +1,484 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CardBack } from "@/components/CardBack";
+import { CardFront, type CardData } from "@/components/CardFront";
+import { PrintSheet } from "@/components/PrintSheet";
+import { MotifIcon } from "@/components/MotifIcon";
+import { stylizeLocally } from "@/lib/chibiFallback";
+import { downloadDataUrl, nodeToPng, printNode } from "@/lib/exportCard";
+import {
+  DEFAULT_PARTS,
+  PART_CATEGORIES,
+  THEME_DEFAULT_PARTS,
+  partsByCategory,
+  type PartsSelection,
+} from "@/lib/parts";
+import { THEME_LIST, THEMES, type ThemeId } from "@/lib/themes";
+
+type Mode = "parts" | "photo";
+
+export function CardStudio() {
+  const [themeId, setThemeId] = useState<ThemeId>("dana");
+  const [mode, setMode] = useState<Mode>("parts");
+  const [parts, setParts] = useState<PartsSelection>(DEFAULT_PARTS);
+  const [customName, setCustomName] = useState("");
+  const [customHp, setCustomHp] = useState<number | "">("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [showPrint, setShowPrint] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
+
+  const frontRef = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const theme = THEMES[themeId];
+
+  const data: CardData = useMemo(
+    () => ({
+      theme,
+      parts,
+      photoUrl: mode === "photo" ? photoUrl : null,
+      customName: customName.trim() || undefined,
+      customHp: customHp === "" ? undefined : Number(customHp),
+    }),
+    [theme, parts, photoUrl, mode, customName, customHp],
+  );
+
+  useEffect(() => {
+    setParts(THEME_DEFAULT_PARTS[themeId] ?? DEFAULT_PARTS);
+  }, [themeId]);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  async function startCamera() {
+    try {
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOn(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          void videoRef.current.play();
+        }
+      });
+    } catch {
+      setStatus("Camera permission blocked — upload a photo instead.");
+    }
+  }
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCameraOn(false);
+  }
+
+  async function captureFromVideo() {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 512;
+    canvas.height = video.videoHeight || 512;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    const blob = await new Promise<Blob | null>((res) =>
+      canvas.toBlob(res, "image/jpeg", 0.92),
+    );
+    if (!blob) return;
+    await runStylize(blob);
+    stopCamera();
+  }
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    await runStylize(file);
+  }
+
+  async function runStylize(blob: Blob) {
+    setBusy(true);
+    setStatus("Stylizing to anime / chibi…");
+    setMode("photo");
+    try {
+      const form = new FormData();
+      form.append("image", blob, "capture.jpg");
+      form.append("theme", themeId);
+      const res = await fetch("/api/stylize", { method: "POST", body: form });
+      const json = (await res.json()) as {
+        image?: string;
+        fallback?: boolean;
+        reason?: string;
+      };
+
+      if (json.image) {
+        setPhotoUrl(json.image);
+        setStatus("AI Gateway stylization applied.");
+      } else {
+        const local = await stylizeLocally(blob);
+        setPhotoUrl(local);
+        setStatus(
+          json.reason
+            ? `Local stylization used — ${json.reason}`
+            : "Local stylization applied (add AI_GATEWAY_API_KEY for AI).",
+        );
+      }
+    } catch (err) {
+      const local = await stylizeLocally(blob);
+      setPhotoUrl(local);
+      setStatus(
+        err instanceof Error
+          ? `Local fallback — ${err.message}`
+          : "Local stylization applied.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadFront() {
+    if (!frontRef.current) return;
+    setBusy(true);
+    try {
+      const url = await nodeToPng(frontRef.current.querySelector(".card-front") as HTMLElement);
+      downloadDataUrl(
+        url,
+        `${(data.customName || theme.name).toLowerCase()}-card-front.png`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadSheet() {
+    setShowPrint(true);
+    await new Promise((r) => setTimeout(r, 80));
+    if (!printRef.current) return;
+    setBusy(true);
+    try {
+      const url = await nodeToPng(printRef.current);
+      downloadDataUrl(
+        url,
+        `${(data.customName || theme.name).toLowerCase()}-print-sheet.png`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePrint() {
+    setShowPrint(true);
+    await new Promise((r) => setTimeout(r, 80));
+    if (!printRef.current) return;
+    setBusy(true);
+    try {
+      await printNode(printRef.current);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pb-16 pt-6 md:px-6">
+      <header className="relative overflow-hidden rounded-[28px] border border-black/10 bg-[linear-gradient(135deg,#FFE56A_0%,#FF9AC8_45%,#2F6BFF_100%)] p-6 text-black shadow-lg md:p-8">
+        <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/30 blur-2xl" />
+        <div className="relative space-y-3">
+          <p className="text-xs font-bold uppercase tracking-[0.35em] text-black/70">
+            © DANA &amp; FRIENDS 2026
+          </p>
+          <h1 className="font-[family-name:var(--font-display)] text-4xl font-black leading-none tracking-tight md:text-6xl">
+            Dana &amp; Friends
+            <span className="mt-2 block text-2xl font-extrabold md:text-3xl">
+              Card Studio
+            </span>
+          </h1>
+          <p className="max-w-xl text-sm font-medium text-black/80 md:text-base">
+            Build a playful trading-style card from a photo or mix-and-match
+            starter parts — then download or print front + back with crop marks.
+          </p>
+        </div>
+      </header>
+
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <section className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {THEME_LIST.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setThemeId(t.id)}
+                className={`inline-flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-bold transition ${
+                  themeId === t.id
+                    ? "scale-[1.02] border-black shadow-md"
+                    : "border-black/10 opacity-80 hover:opacity-100"
+                }`}
+                style={{ background: t.accentSoft }}
+              >
+                <MotifIcon motif={t.motif} size={14} />
+                {t.name}
+              </button>
+            ))}
+          </div>
+
+          <div
+            ref={frontRef}
+            className="mx-auto w-full max-w-[380px] transition duration-500 [animation:card-float_4s_ease-in-out_infinite]"
+          >
+            <CardFront data={data} />
+          </div>
+
+          <div className="mx-auto grid w-full max-w-[380px] grid-cols-2 gap-3">
+            <div>
+              <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/50">
+                Back preview
+              </p>
+              <CardBack theme={theme} />
+            </div>
+            <div className="flex flex-col justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={downloadFront}
+                className="rounded-xl bg-black px-3 py-3 text-sm font-bold text-white disabled:opacity-50"
+              >
+                Download front
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={downloadSheet}
+                className="rounded-xl border-2 border-black bg-white px-3 py-3 text-sm font-bold disabled:opacity-50"
+              >
+                Download print sheet
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handlePrint}
+                className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-3 py-3 text-sm font-bold disabled:opacity-50"
+              >
+                Print front + back
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <aside className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur md:p-5">
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-black/5 p-1">
+            <ModeButton active={mode === "parts"} onClick={() => setMode("parts")}>
+              Parts mixer
+            </ModeButton>
+            <ModeButton active={mode === "photo"} onClick={() => setMode("photo")}>
+              Photo / camera
+            </ModeButton>
+          </div>
+
+          <label className="block space-y-1 text-sm font-semibold">
+            Card name
+            <input
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder={theme.name}
+              className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
+            />
+          </label>
+          <label className="block space-y-1 text-sm font-semibold">
+            HP
+            <input
+              type="number"
+              value={customHp}
+              onChange={(e) =>
+                setCustomHp(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              placeholder={String(theme.hp)}
+              className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
+            />
+          </label>
+
+          {mode === "parts" ? (
+            <div className="space-y-4">
+              {PART_CATEGORIES.map((cat) => (
+                <div key={cat.id} className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+                    {cat.label}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {partsByCategory(cat.id).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() =>
+                          setParts((p) => ({ ...p, [cat.id]: opt.id }))
+                        }
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${
+                          parts[cat.id] === opt.id
+                            ? "border-black bg-black text-white"
+                            : "border-black/15 bg-white hover:border-black/40"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-black/70">
+                Capture live or upload a photo. We stylize it toward anime/chibi
+                card art (AI Gateway when configured, local fallback otherwise).
+              </p>
+              <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
+                {cameraOn ? (
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    className="aspect-square w-full object-cover"
+                  />
+                ) : photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photoUrl}
+                    alt="Stylized preview"
+                    className="aspect-square w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-square items-center justify-center text-sm text-white/60">
+                    Camera / photo preview
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {!cameraOn ? (
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="rounded-xl bg-black px-3 py-2 text-sm font-bold text-white"
+                  >
+                    Open camera
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={captureFromVideo}
+                    disabled={busy}
+                    className="rounded-xl bg-[#2F6BFF] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    Capture &amp; stylize
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy}
+                  className="rounded-xl border-2 border-black px-3 py-2 text-sm font-bold disabled:opacity-50"
+                >
+                  Upload photo
+                </button>
+              </div>
+              {cameraOn && (
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-full rounded-xl border border-black/20 px-3 py-2 text-xs font-bold"
+                >
+                  Close camera
+                </button>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => void onFile(e.target.files?.[0])}
+              />
+              {photoUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhotoUrl(null);
+                    setMode("parts");
+                  }}
+                  className="text-xs font-semibold underline"
+                >
+                  Clear photo &amp; return to parts
+                </button>
+              )}
+            </div>
+          )}
+
+          {status && (
+            <p className="rounded-xl bg-black/5 px-3 py-2 text-xs font-medium text-black/70">
+              {status}
+            </p>
+          )}
+          {busy && (
+            <p className="animate-pulse text-xs font-bold text-[#2F6BFF]">
+              Working…
+            </p>
+          )}
+        </aside>
+      </div>
+
+      <div
+        ref={printRef}
+        className={showPrint ? "block" : "pointer-events-none absolute -left-[9999px] top-0 w-[1100px]"}
+        aria-hidden={!showPrint}
+      >
+        <PrintSheet data={data} />
+      </div>
+
+      {showPrint && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-[family-name:var(--font-display)] text-2xl font-black">
+              Print sheet
+            </h2>
+            <button
+              type="button"
+              className="text-sm font-bold underline"
+              onClick={() => setShowPrint(false)}
+            >
+              Hide
+            </button>
+          </div>
+          <PrintSheet data={data} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
+        active ? "bg-black text-white shadow" : "text-black/70 hover:bg-white"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
