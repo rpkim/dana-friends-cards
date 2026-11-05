@@ -1,123 +1,153 @@
+import type { PaletteId } from "@/lib/themes";
+
 /**
- * Photo → A4 print-sheet generation prompt (verbatim user copy).
- * Only name / HP / attack strings may be substituted when the form differs
- * from the defaults embedded below. Layout, style, and identity lines stay exact.
+ * Photo → A4 print-sheet prompt template.
+ * Only `{...}` placeholders are filled from the live card form.
+ * Layout / wording outside braces stays exact.
  */
 
-export const DEFAULT_PRINT_NAME = "DANA";
-export const DEFAULT_PRINT_HP = "999";
-export const DEFAULT_ATTACK1_NAME = "Endless Energy";
-export const DEFAULT_ATTACK1_DAMAGE = "30";
-export const DEFAULT_ATTACK1_TEXT =
-  "Dana never runs out of energy! She plays, dances and laughs all day without ever getting tired.";
-export const DEFAULT_ATTACK2_NAME = "Instant Friendship";
-export const DEFAULT_ATTACK2_DAMAGE = "60";
-export const DEFAULT_ATTACK2_TEXT =
-  "Makes a brand-new friend in under a minute. The opponent becomes her friend and joins the party!";
+export const PHOTO_PRINT_SHEET_TEMPLATE = `[TASK & OUTPUT FORMAT]
+Generate a high-resolution, print-ready A4 sheet containing two side-by-side trading cards of identical dimensions (63mm x 88mm scale), separated by a vertical center dashed cutting line ("CUT OR FOLD HERE ✂"). Top of the page includes alignment crop marks and printable margins.
 
-/** Canonical prompt body — do not rewrite layout/style/identity lines. */
-export const PHOTO_STYLIZE_INSTRUCTION = `Create a print-ready A4 sheet featuring two side-by-side Pokemon trading cards of identical size, separated by a vertical center dashed line ("CUT OR FOLD HERE ✂").
+[THEME & COLOR PALETTE]
+Primary Color Theme: {CHROME_PALETTE_STYLE}
+- Ensure BOTH front and back cards strictly use the {CHROME_PALETTE} color scheme.
+- Do NOT alter or switch to other background colors like pink unless explicitly specified in the palette.
 
-IDENTITY & PORTRAIT (High Priority):
-- Stylize the person in the provided photo as a cute anime/chibi character for the front card image box.
-- Maintain recognizable facial features, hair color/style, skin tone, and expression from the photo.
-- The character wears a yellow Pikachu hoodie with cute Pikachu ears.
+[CARD 1 - FRONT DESIGN]
+1. Frame Style: Authentic TCG trading card frame layout styled with {CHROME_PALETTE_STYLE} borders and star/energy icon decorations.
+2. Header Row:
+   - Top-Left Name: "{CARD_NAME}" in bold, 3D bubble style font.
+   - Top-Right HP: "HP {HP_VALUE}".
+   - Sub-badge: "{TYPE_LABEL}".
+3. Center Artwork Box:
+   - Subject: Stylize the person in the provided user photo as a cute anime/chibi character (referencing the input image while preserving recognizable facial features, hair, and smile).
+   - Character Outfit: Wearing a cute hoodie matching the theme.
+   - Caption Badge inside/below art box: "{CAPTION_UNDER_ART}".
+4. Attack & Stats Area:
+   - Standard TCG attack layout with skill names, descriptions, damage numbers, weakness, and retreat stats matching the card theme.
+   - Attack 1: "{ATTACK1_NAME}" — damage {ATTACK1_DAMAGE}. Description: "{ATTACK1_TEXT}"
+   - Attack 2: "{ATTACK2_NAME}" — damage {ATTACK2_DAMAGE}. Description: "{ATTACK2_TEXT}"
+   - Bottom stats: Weakness "{WEAKNESS}", Resistance "{RESISTANCE}", Retreat {RETREAT}.
 
-CARD 1 (LEFT - FRONT DESIGN):
-- Theme: Bright golden-yellow official Pokemon TCG card frame.
-- Header: "DANA" in bold 3D bubble letters on top left, "HP 999" on top right.
-- Center Art: The stylized anime character sitting inside the illustration frame, smiling cheerfully against a lightning/Pokemon gym background.
-- Attack 1: "Endless Energy 30" with text "Dana never runs out of energy! She plays, dances and laughs all day without ever getting tired."
-- Attack 2: "Instant Friendship 60" with text "Makes a brand-new friend in under a minute. The opponent becomes her friend and joins the party!"
-- Bottom Box: "Weakness Dark x2", "Resistance -", "Retreat 1".
+[CARD 2 - BACK DESIGN]
+1. Frame Style: Matching {CHROME_PALETTE_STYLE} border frame and background pattern consistent with the front card.
+2. Top Title: "{CARD_NAME} & Friends" in large, adorable 3D cartoon font.
+3. Center Graphic Box: Cute chibi illustration of the main character surrounded by cute anime mascot friends, celebrating together.
+4. Bottom Text: "LET'S PLAY TOGETHER!" and "{CARD_NAME}'S SPECIAL CARD".
 
-CARD 2 (RIGHT - BACK DESIGN):
-- Theme: Matching golden-yellow frame and star-patterned background.
-- Top Header: "Dana & Friends" in large playful 3D cartoon font.
-- Center Art Box: A cute illustration of the chibi Pikachu-hoodie girl surrounded by cute mascot friends (Pikachu, Eevee, Charmander, Squirtle, Piplup).
-- Middle Text: "LET'S PLAY TOGETHER!" in bold uppercase text.
-- Bottom Box: "Endless Energy & Friendship!" and "DANA'S SPECIAL CARD • 2026".
+[STRICT CONSTRAINTS]
+- Exact text rendering: Double-check spellings for "{CARD_NAME}", "HP {HP_VALUE}", "{TYPE_LABEL}", and "{CAPTION_UNDER_ART}".
+- Both left and right cards must maintain perfect horizontal symmetry and identical outer boundary dimensions.
+- High quality 2D anime vector style, clean line art.`;
 
-PAGE LAYOUT & STYLE:
-- Include Top Margin Text: "A4 SIZE (210 x 297 mm)" and "PRINT AT 100% SCALE (DO NOT FIT TO PAGE)".
-- Include crop/alignment marks at the paper corners.
-- Colors must be vibrant yellow/gold throughout (DO NOT use pink or generic background colors).
-- High resolution, crisp lines, clean 2D vector art style.`;
+/** Alias kept for existing imports / logging. */
+export const PHOTO_STYLIZE_INSTRUCTION = PHOTO_PRINT_SHEET_TEMPLATE;
+
+/**
+ * Exact palette sentences — do not paraphrase.
+ * CHROME_PALETTE uses the same sentence so the "strictly use" line is concrete.
+ */
+export const CHROME_PALETTE_COPY: Record<
+  PaletteId,
+  { chromePalette: string; chromePaletteStyle: string }
+> = {
+  electric: {
+    chromePalette:
+      "Bright golden-yellow Pokemon TCG palette, yellow border, lightning and golden star accents",
+    chromePaletteStyle:
+      "Bright golden-yellow Pokemon TCG palette, yellow border, lightning and golden star accents",
+  },
+  sparkle: {
+    chromePalette:
+      "Cute pastel pink sparkle palette, pink border, heart and star accents",
+    chromePaletteStyle:
+      "Cute pastel pink sparkle palette, pink border, heart and star accents",
+  },
+  aura: {
+    chromePalette:
+      "Cool blue aura energy palette, cyan/blue border, water/crystal accents",
+    chromePaletteStyle:
+      "Cool blue aura energy palette, cyan/blue border, water/crystal accents",
+  },
+  autumn: {
+    chromePalette:
+      "Warm autumn cozy palette, orange/brown border, leaf accents",
+    chromePaletteStyle:
+      "Warm autumn cozy palette, orange/brown border, leaf accents",
+  },
+};
 
 export type PhotoPrintSheetFields = {
+  paletteId?: PaletteId | string;
   name?: string;
   hp?: number | string;
+  typeLabel?: string;
+  caption?: string;
   attack1Name?: string;
   attack1Damage?: number | string;
   attack1Text?: string;
   attack2Name?: string;
   attack2Damage?: number | string;
   attack2Text?: string;
+  weakness?: string;
+  resistance?: string;
+  retreat?: number | string;
 };
 
+function fill(template: string, key: string, value: string): string {
+  return template.split(`{${key}}`).join(value);
+}
+
 /**
- * Returns the verbatim print-sheet prompt, substituting only name / HP /
- * attack strings when the form values differ from the embedded defaults.
+ * Build the A4 print-sheet prompt by substituting live form values into the
+ * template braces. Does not rewrite any non-placeholder wording.
  */
 export function buildPhotoPrintSheetPrompt(
   fields: PhotoPrintSheetFields = {},
 ): string {
-  let prompt = PHOTO_STYLIZE_INSTRUCTION;
+  const paletteId = (fields.paletteId || "electric") as PaletteId;
+  const chrome =
+    CHROME_PALETTE_COPY[paletteId] || CHROME_PALETTE_COPY.electric;
 
-  const name = (fields.name ?? "").trim().toUpperCase() || DEFAULT_PRINT_NAME;
-  const hp = String(fields.hp ?? DEFAULT_PRINT_HP).trim() || DEFAULT_PRINT_HP;
-  const a1Name =
-    (fields.attack1Name ?? "").trim() || DEFAULT_ATTACK1_NAME;
-  const a1Dmg =
-    String(fields.attack1Damage ?? DEFAULT_ATTACK1_DAMAGE).trim() ||
-    DEFAULT_ATTACK1_DAMAGE;
-  const a1Text =
-    (fields.attack1Text ?? "").trim() || DEFAULT_ATTACK1_TEXT;
-  const a2Name =
-    (fields.attack2Name ?? "").trim() || DEFAULT_ATTACK2_NAME;
-  const a2Dmg =
-    String(fields.attack2Damage ?? DEFAULT_ATTACK2_DAMAGE).trim() ||
-    DEFAULT_ATTACK2_DAMAGE;
-  const a2Text =
-    (fields.attack2Text ?? "").trim() || DEFAULT_ATTACK2_TEXT;
+  // Fallbacks: name → DANA; HP blank → 100 (keep 999 only if field says 999);
+  // type → Play Type; caption → never blank.
+  const cardName = (fields.name ?? "").trim() || "DANA";
+  const hpRaw = String(fields.hp ?? "").trim();
+  const hp = hpRaw === "" ? "100" : hpRaw;
+  const typeLabel = (fields.typeLabel ?? "").trim() || "Play Type";
+  const caption = (fields.caption ?? "").trim() || "Cuteness 100%";
+  const a1Name = (fields.attack1Name ?? "").trim() || "Attack 1";
+  const a1Dmg = String(fields.attack1Damage ?? 30).trim() || "30";
+  const a1Text = (fields.attack1Text ?? "").trim() || "";
+  const a2Name = (fields.attack2Name ?? "").trim() || "Attack 2";
+  const a2Dmg = String(fields.attack2Damage ?? 60).trim() || "60";
+  const a2Text = (fields.attack2Text ?? "").trim() || "";
+  const weakness = (fields.weakness ?? "").trim() || "Dark ×2";
+  const resistance = (fields.resistance ?? "").trim() || "—";
+  const retreat = String(fields.retreat ?? 1).trim() || "1";
 
-  if (name !== DEFAULT_PRINT_NAME) {
-    prompt = prompt.replace(
-      'Header: "DANA" in bold 3D bubble letters on top left',
-      `Header: "${name}" in bold 3D bubble letters on top left`,
-    );
-  }
-
-  if (hp !== DEFAULT_PRINT_HP) {
-    prompt = prompt.replace('"HP 999"', `"HP ${hp}"`);
-  }
-
-  if (
-    a1Name !== DEFAULT_ATTACK1_NAME ||
-    a1Dmg !== DEFAULT_ATTACK1_DAMAGE ||
-    a1Text !== DEFAULT_ATTACK1_TEXT
-  ) {
-    prompt = prompt.replace(
-      `- Attack 1: "Endless Energy 30" with text "${DEFAULT_ATTACK1_TEXT}"`,
-      `- Attack 1: "${a1Name} ${a1Dmg}" with text "${a1Text}"`,
-    );
-  }
-
-  if (
-    a2Name !== DEFAULT_ATTACK2_NAME ||
-    a2Dmg !== DEFAULT_ATTACK2_DAMAGE ||
-    a2Text !== DEFAULT_ATTACK2_TEXT
-  ) {
-    prompt = prompt.replace(
-      `- Attack 2: "Instant Friendship 60" with text "${DEFAULT_ATTACK2_TEXT}"`,
-      `- Attack 2: "${a2Name} ${a2Dmg}" with text "${a2Text}"`,
-    );
-  }
-
+  let prompt = PHOTO_PRINT_SHEET_TEMPLATE;
+  // Theme section: STYLE first, then the concrete CHROME_PALETTE "strictly use" line.
+  prompt = fill(prompt, "CHROME_PALETTE_STYLE", chrome.chromePaletteStyle);
+  prompt = fill(prompt, "CHROME_PALETTE", chrome.chromePalette);
+  prompt = fill(prompt, "CARD_NAME", cardName);
+  prompt = fill(prompt, "HP_VALUE", hp);
+  prompt = fill(prompt, "TYPE_LABEL", typeLabel);
+  prompt = fill(prompt, "CAPTION_UNDER_ART", caption);
+  prompt = fill(prompt, "ATTACK1_NAME", a1Name);
+  prompt = fill(prompt, "ATTACK1_DAMAGE", a1Dmg);
+  prompt = fill(prompt, "ATTACK1_TEXT", a1Text);
+  prompt = fill(prompt, "ATTACK2_NAME", a2Name);
+  prompt = fill(prompt, "ATTACK2_DAMAGE", a2Dmg);
+  prompt = fill(prompt, "ATTACK2_TEXT", a2Text);
+  prompt = fill(prompt, "WEAKNESS", weakness);
+  prompt = fill(prompt, "RESISTANCE", resistance);
+  prompt = fill(prompt, "RETREAT", retreat);
   return prompt;
 }
 
-/** @deprecated theme/type suffix removed — full A4 prompt is self-contained. */
+/** @deprecated theme/type suffix removed — template is self-contained. */
 export function photoStylizeUserSuffix(_opts: {
   theme?: string;
   typeLabel?: string;

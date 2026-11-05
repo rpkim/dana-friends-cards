@@ -16,18 +16,22 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("image");
     const palette = String(form.get("palette") || form.get("theme") || "electric");
-    const typeLabel = String(form.get("typeLabel") || "Custom Type");
+    const typeLabel = String(form.get("typeLabel") || "");
     const imageModel = String(
       form.get("imageModel") || form.get("GEMINI_IMAGE_MODEL") || "",
     );
     const name = String(form.get("name") || "");
     const hp = String(form.get("hp") || "");
+    const caption = String(form.get("caption") || "");
     const attack1Name = String(form.get("attack1Name") || "");
     const attack1Damage = String(form.get("attack1Damage") || "");
     const attack1Text = String(form.get("attack1Text") || "");
     const attack2Name = String(form.get("attack2Name") || "");
     const attack2Damage = String(form.get("attack2Damage") || "");
     const attack2Text = String(form.get("attack2Text") || "");
+    const weakness = String(form.get("weakness") || "");
+    const resistance = String(form.get("resistance") || "");
+    const retreat = String(form.get("retreat") || "");
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
@@ -36,7 +40,7 @@ export async function POST(req: Request) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = file.type || "image/jpeg";
 
-    // Photo + verbatim A4 print-sheet prompt. Returns a full sheet image
+    // Photo + live-form A4 print-sheet template. Returns a full sheet image
     // (front left / back right) — not a portrait for the art frame.
     const result = await generateChibiImage({
       theme: palette,
@@ -48,14 +52,20 @@ export async function POST(req: Request) {
       },
       imageModel: imageModel || undefined,
       cardFields: {
+        paletteId: palette,
         name,
         hp,
+        typeLabel,
+        caption,
         attack1Name,
         attack1Damage,
         attack1Text,
         attack2Name,
         attack2Damage,
         attack2Text,
+        weakness,
+        resistance,
+        retreat,
       },
     });
 

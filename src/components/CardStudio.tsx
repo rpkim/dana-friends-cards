@@ -253,12 +253,16 @@ export function CardStudio() {
       form.append("imageModel", imageModel);
       form.append("name", draft.name);
       form.append("hp", String(draft.hp));
+      form.append("caption", draft.caption);
       form.append("attack1Name", draft.attack1Name);
       form.append("attack1Damage", String(draft.attack1Damage));
       form.append("attack1Text", draft.attack1Text);
       form.append("attack2Name", draft.attack2Name);
       form.append("attack2Damage", String(draft.attack2Damage));
       form.append("attack2Text", draft.attack2Text);
+      form.append("weakness", draft.weakness);
+      form.append("resistance", draft.resistance);
+      form.append("retreat", String(draft.retreat));
       const res = await fetch("/api/stylize", { method: "POST", body: form });
       let json: {
         image?: string;
