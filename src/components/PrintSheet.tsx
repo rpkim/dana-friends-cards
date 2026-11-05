@@ -8,8 +8,8 @@ export type PrintPairKind = "dana" | "name";
 type Props = {
   data: CardData;
   /**
-   * Unified friends-party illustration (stylized kid among mascots).
-   * Same scene on Dana & Friends and {name} & Friends backs.
+   * Personalized friends-party scene for the {name} & Friends back only.
+   * Dana & Friends always keeps the stock brand background art.
    */
   friendsSceneUrl?: string | null;
   /** Card name for the name pair. */
@@ -34,6 +34,8 @@ export function PrintSheet({
     ? "Dana’s Special Card • 2026"
     : `${name.toUpperCase()}'S SPECIAL CARD • 2026`;
   const pairLabel = isDana ? "Dana & Friends pair" : `${name} & Friends pair`;
+  // Brand Dana back = stock art. Name back may use personalized scene.
+  const backSceneUrl = isDana ? null : friendsSceneUrl;
 
   return (
     <div
@@ -70,7 +72,7 @@ export function PrintSheet({
             theme={data.theme}
             title={backTitle}
             footer={backFooter}
-            sceneUrl={friendsSceneUrl}
+            sceneUrl={backSceneUrl}
           />
         </div>
       </div>

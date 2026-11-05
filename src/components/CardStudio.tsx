@@ -93,7 +93,7 @@ export function CardStudio() {
   const [showExamples, setShowExamples] = useState(false);
   /** Gemini A4 sheet (front + Dana & Friends back). Never cropped into art frame. */
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
-  /** Unified friends-party scene (kid among mascots) shared by BOTH backs. */
+  /** Personalized friends-party scene for the {name} & Friends back only. */
   const [friendsSceneUrl, setFriendsSceneUrl] = useState<string | null>(null);
   /** Stylized portrait for the live front art frame. */
   const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
@@ -601,7 +601,7 @@ export function CardStudio() {
                   theme={theme}
                   title="Dana & Friends"
                   footer="Dana’s Special Card • 2026"
-                  sceneUrl={friendsSceneUrl}
+                  /* Brand back keeps stock friends art — never swap the background. */
                 />
               ) : (
                 <CardBack
@@ -801,8 +801,8 @@ export function CardStudio() {
           <div className="space-y-3">
             <p className="text-sm text-black/70">
               Capture or upload → Gemini stylizes the front portrait and a
-              friends-party back scene (same kid among the mascots). Two print
-              pairs share that scene; only the back title changes.
+              personalized friends-party scene for the name back. Dana &amp;
+              Friends keeps the classic brand background art.
             </p>
             <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
               {cameraOn ? (
@@ -977,7 +977,8 @@ export function CardStudio() {
           </div>
           <p className="text-xs font-medium text-black/55">
             Two separate 2-up sheets — front | back, #FFFFFF page, dashed fold
-            line only. Same friends scene on both backs; only the title changes.
+            line only. Dana &amp; Friends keeps stock back art; name back may
+            use the personalized friends scene.
           </p>
           {printView === "switch" ? (
             <div className="inline-flex rounded-xl border border-black/10 bg-black/[0.03] p-1">

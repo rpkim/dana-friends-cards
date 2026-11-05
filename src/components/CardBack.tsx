@@ -11,14 +11,14 @@ type Props = {
   /** Footer line under the tagline. */
   footer?: string;
   /**
-   * Unified friends-party illustration: the stylized kid IS the person in the
-   * middle of the mascots (same face/hair/hoodie as the front). Shared by both
-   * backs — title/footer are the only differences. Never a face sticker.
+   * Personalized friends-party illustration for the {name} & Friends back.
+   * Dana & Friends brand back ignores this and always uses stock BACK_SCENE art
+   * so the classic cream/sparkle friends background stays unchanged.
    */
   sceneUrl?: string | null;
 };
 
-/** Dense stock friends scenes when no personalized scene is ready yet. */
+/** Classic brand friends scenes — Dana & Friends back always uses these. */
 const BACK_SCENE: Record<PaletteId, string> = {
   electric: "/art/backs/friends-electric.jpg",
   autumn: "/art/backs/friends-autumn.jpg",
@@ -27,8 +27,8 @@ const BACK_SCENE: Record<PaletteId, string> = {
 };
 
 /**
- * Dense play back. Center art is one illustration (personalized friends scene
- * when `sceneUrl` is set). No circular inset, no ring, no face overlay.
+ * Dense play back. Dana & Friends = stock theme art. Name back may pass a
+ * personalized `sceneUrl`. No circular inset, no ring, no face overlay.
  */
 export function CardBack({
   theme,
