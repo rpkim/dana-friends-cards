@@ -1,16 +1,15 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { FriendBadge, MotifIcon } from "@/components/MotifIcon";
 import { CharacterStage } from "@/components/CharacterStage";
-import type { PartsSelection } from "@/lib/parts";
 import type { Theme } from "@/lib/themes";
 
 export type CardData = {
   theme: Theme;
   customName?: string;
   customHp?: number;
-  parts: PartsSelection;
-  photoUrl?: string | null;
+  artUrl: string;
 };
 
 type Props = {
@@ -19,55 +18,54 @@ type Props = {
 };
 
 export function CardFront({ data, className }: Props) {
-  const { theme, parts, photoUrl } = data;
+  const { theme, artUrl } = data;
   const name = (data.customName || theme.name).toUpperCase();
   const hp = data.customHp ?? theme.hp;
   const isDark = theme.id === "ritsuki";
 
   return (
     <article
-      className={`card-front relative flex aspect-[63/88] w-full flex-col overflow-hidden rounded-[18px] border-[6px] p-2 shadow-xl ${className ?? ""}`}
+      className={`card-front relative flex aspect-[63/88] w-full flex-col overflow-hidden rounded-[22px] border-[7px] p-[7px] shadow-[0_12px_28px_rgba(0,0,0,.28)] ${className ?? ""}`}
       style={{
-        background: `linear-gradient(160deg, ${theme.accentSoft}, ${theme.accent} 45%, ${theme.border})`,
+        background: cardFaceGradient(theme),
         borderColor: theme.border,
         color: theme.text,
       }}
       data-card-side="front"
     >
-      <BorderDecor motif={theme.motif} accent={theme.accentDeep} />
+      <CornerScrews />
+      <BorderMotifStrip motif={theme.motif} />
 
-      <header className="relative z-10 mb-1 flex items-start justify-between gap-2 px-1 pt-1">
+      {/* Header */}
+      <header className="relative z-10 flex items-start justify-between gap-2 px-1.5 pt-1">
         <h2
-          className="font-[family-name:var(--font-display)] text-[clamp(1.35rem,4.5vw,1.85rem)] font-black leading-none tracking-wide"
-          style={{
-            color: isDark ? "#fff" : theme.accentDeep,
-            textShadow: isDark
-              ? `0 0 8px ${theme.accent}, 2px 2px 0 ${theme.accentDeep}`
-              : `2px 2px 0 #fff, 3px 3px 0 ${theme.accent}`,
-          }}
+          className="font-[family-name:var(--font-display)] text-[clamp(1.55rem,5vw,2.05rem)] font-black leading-none tracking-wide"
+          style={nameStyle(theme, isDark)}
         >
           {name}
         </h2>
-        <div className="flex items-center gap-1">
-          <MotifIcon motif={theme.motif} size={18} className="text-yellow-300" />
+        <div className="mt-0.5 flex items-center gap-1">
+          <MotifIcon motif={theme.motif} size={18} />
+          <MotifIcon motif={theme.motif} size={14} />
           <div
-            className="rounded-full px-2.5 py-0.5 text-sm font-black"
+            className="rounded-full px-2.5 py-0.5 text-[13px] font-black tracking-wide"
             style={{
-              background: isDark ? theme.accent : "#fff",
+              background: isDark ? theme.accent : "#fffef6",
               color: isDark ? "#fff" : "#111",
-              boxShadow: "0 1px 0 rgba(0,0,0,.25)",
+              boxShadow: "0 1px 0 rgba(0,0,0,.3), inset 0 0 0 1px rgba(0,0,0,.08)",
             }}
           >
-            HP {hp}
+            <span className="opacity-70">HP</span> {hp}
           </div>
         </div>
       </header>
 
-      <div className="relative z-10 mb-1 flex items-center gap-1 px-1">
+      {/* Play type */}
+      <div className="relative z-10 mb-1 mt-1 flex items-center gap-1 px-1.5">
         <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
+          className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10px] font-extrabold shadow-sm"
           style={{
-            background: isDark ? "#fff8" : "#fff",
+            background: isDark ? "rgba(255,255,255,.92)" : "#fff",
             color: theme.accentDeep,
           }}
         >
@@ -76,158 +74,217 @@ export function CardFront({ data, className }: Props) {
         </span>
       </div>
 
+      {/* Art frame */}
       <div
-        className="relative z-10 mx-1 overflow-hidden rounded-md border-[3px]"
+        className="relative z-10 mx-1 overflow-hidden rounded-[6px] border-[3.5px] shadow-[inset_0_0_0_1px_rgba(255,255,255,.35)]"
         style={{
-          borderColor: "#1a1a1a",
+          borderColor: "#151515",
           background: theme.artBg,
-          aspectRatio: "1 / 1.05",
+          aspectRatio: "1 / 1.02",
         }}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between px-1 pt-1">
-          <span className="rounded bg-black/50 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-            Art Frame
-          </span>
-        </div>
-        <CharacterStage parts={parts} photoUrl={photoUrl} />
-        <div className="pointer-events-none absolute bottom-1 left-1 z-10 rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-semibold text-black">
+        <CharacterStage artUrl={artUrl} />
+        <div className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 rounded-full bg-white/92 px-2 py-0.5 text-[9px] font-bold text-black shadow">
           {theme.age} • {theme.playfulness}
         </div>
-        <ArtFrameDecor motif={theme.motif} />
+        <FrameIconRail motif={theme.motif} />
       </div>
 
+      {/* Attacks */}
       <div
-        className="relative z-10 mx-1 mt-2 flex flex-1 flex-col gap-1.5 rounded-md px-2 py-1.5"
+        className="relative z-10 mx-1 mt-2 flex flex-1 flex-col justify-center gap-1 rounded-md border border-black/5 px-2 py-1.5"
         style={{ background: theme.panel }}
       >
         {theme.attacks.map((atk, i) => (
-          <div key={atk.name} className="space-y-0.5">
-            <div className="flex items-center gap-2">
+          <div key={atk.name}>
+            <div className="flex items-start gap-2">
               <span
-                className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black text-white"
+                className="mt-0.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full text-[10px] font-black text-white shadow"
                 style={{ background: theme.accentDeep }}
               >
                 {atk.cost}
               </span>
-              <span style={{ color: theme.accent }} className="opacity-90">
-                <MotifIcon motif={theme.motif} size={14} />
-              </span>
-              <span className="flex-1 text-sm font-extrabold" style={{ color: isDark ? "#fff" : theme.accentDeep }}>
-                {atk.name}
-              </span>
-              <span className="text-base font-black" style={{ color: isDark ? "#fff" : "#111" }}>
-                {atk.damage}
-              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span
+                    className="flex-1 text-[13px] font-black leading-tight"
+                    style={{ color: isDark ? "#fff" : theme.accentDeep }}
+                  >
+                    {atk.name}
+                  </span>
+                  <span
+                    className="text-[17px] font-black tabular-nums"
+                    style={{ color: isDark ? "#fff" : "#111" }}
+                  >
+                    {atk.damage}
+                  </span>
+                </div>
+                <p
+                  className="mt-0.5 text-[9.5px] leading-snug"
+                  style={{ color: isDark ? "#c9d6ff" : "#333" }}
+                >
+                  {atk.description}
+                </p>
+              </div>
             </div>
-            <p
-              className="pl-7 text-[10px] leading-snug"
-              style={{ color: isDark ? "#c9d6ff" : "#333" }}
-            >
-              {atk.description}
-            </p>
             {i === 0 && (
-              <div className="flex justify-center gap-1 py-0.5 text-[8px] opacity-60">
-                ★ ★ ★
+              <div
+                className="my-1 flex items-center justify-center gap-1 text-[8px] opacity-55"
+                style={{ color: isDark ? "#fff" : theme.accentDeep }}
+              >
+                ★ ★ ★ ★ ★
               </div>
             )}
           </div>
         ))}
       </div>
 
+      {/* Stats */}
       <div
-        className="relative z-10 mx-1 mt-1.5 grid grid-cols-3 gap-1 rounded px-1 py-1 text-[9px] font-bold"
-        style={{
-          background: theme.accentDeep,
-          color: "#fff",
-        }}
+        className="relative z-10 mx-1 mt-1.5 grid grid-cols-3 gap-1 rounded-sm px-1.5 py-1 text-[9px] font-bold"
+        style={{ background: theme.accentDeep, color: "#fff" }}
       >
         <div className="flex items-center gap-1">
-          <span className="opacity-70">Weak</span>
+          <span className="opacity-65">Weak</span>
           <MotifIcon motif={theme.motif} size={10} />
           <span>{theme.weakness}</span>
         </div>
-        <div className="flex items-center gap-1 justify-center">
-          <span className="opacity-70">Resist</span>
+        <div className="flex items-center justify-center gap-1">
+          <span className="opacity-65">Resist</span>
           <span>{theme.resistance}</span>
         </div>
-        <div className="flex items-center gap-1 justify-end">
-          <span className="opacity-70">Retreat</span>
+        <div className="flex items-center justify-end gap-1">
+          <span className="opacity-65">Retreat</span>
           <FriendBadge size={10} />
           <span>{theme.retreat}</span>
         </div>
       </div>
 
+      {/* Flavor */}
       <p
-        className="relative z-10 mx-1 mt-1 rounded px-1.5 py-1 text-[9px] italic leading-snug"
+        className="relative z-10 mx-1 mt-1 rounded-sm px-1.5 py-1 text-[9px] italic leading-snug"
         style={{
           background: isDark ? "#061433" : theme.accentSoft,
           color: isDark ? "#dce6ff" : theme.accentDeep,
+          boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06)",
         }}
       >
         “{theme.flavor}”
       </p>
 
-      <footer className="relative z-10 mt-1 flex items-end justify-between px-1 pb-0.5 text-[8px] font-semibold opacity-80">
-        <span>
-          Card No. {theme.cardNo} • Custom Card • © DANA &amp; FRIENDS 2026 • Play
-          Set
-        </span>
+      <footer className="relative z-10 mt-1 px-1.5 pb-2.5 text-[7.5px] font-semibold tracking-wide opacity-80">
+        Card No. {theme.cardNo} • Custom Card • © DANA &amp; FRIENDS 2026 • Play
+        Set
       </footer>
 
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 right-0 h-3 opacity-90"
-        style={{
-          background: `repeating-linear-gradient(135deg, #111 0 8px, ${theme.accent} 8px 16px)`,
-        }}
-      />
+      <HazardCorners accent={theme.accent} />
     </article>
   );
 }
 
-function BorderDecor({
-  motif,
-  accent,
-}: {
-  motif: Theme["motif"];
-  accent: string;
-}) {
-  const spots = [
-    "top-2 left-2",
-    "top-2 right-2",
-    "bottom-5 left-2",
-    "bottom-5 right-2",
-    "top-1/3 left-1",
-    "top-1/3 right-1",
-    "top-2/3 left-1",
-    "top-2/3 right-1",
+function cardFaceGradient(theme: Theme) {
+  if (theme.id === "ritsuki") {
+    return `radial-gradient(circle at 50% 0%, #2a5fd4 0%, ${theme.accentDeep} 55%, #020814 100%)`;
+  }
+  return `linear-gradient(165deg, ${theme.accentSoft} 0%, ${theme.accent} 42%, ${theme.border} 100%)`;
+}
+
+function nameStyle(theme: Theme, isDark: boolean): CSSProperties {
+  if (isDark) {
+    return {
+      color: "#fff",
+      WebkitTextStroke: `2px ${theme.accent}`,
+      paintOrder: "stroke fill",
+      textShadow: `0 0 10px ${theme.accent}, 2px 2px 0 #020814`,
+    };
+  }
+  if (theme.id === "josephine") {
+    return {
+      background: "linear-gradient(#fff,#FF7AB8)",
+      WebkitBackgroundClip: "text",
+      backgroundClip: "text",
+      color: "transparent",
+      WebkitTextStroke: `2.5px ${theme.accentDeep}`,
+      paintOrder: "stroke fill",
+      filter: "drop-shadow(2px 2px 0 rgba(0,0,0,.15))",
+    };
+  }
+  return {
+    color: theme.accentDeep,
+    WebkitTextStroke: "2.5px #fff",
+    paintOrder: "stroke fill",
+    textShadow: `3px 3px 0 ${theme.accent}, 1px 1px 0 rgba(0,0,0,.25)`,
+  };
+}
+
+function CornerScrews() {
+  const pos = [
+    "left-1.5 top-1.5",
+    "right-1.5 top-1.5",
+    "bottom-4 left-1.5",
+    "bottom-4 right-1.5",
   ];
   return (
     <>
-      {spots.map((pos) => (
+      {pos.map((p) => (
         <span
-          key={pos}
-          className={`pointer-events-none absolute z-0 ${pos}`}
-          style={{ color: accent }}
-        >
-          <MotifIcon motif={motif} size={12} />
-        </span>
+          key={p}
+          className={`pointer-events-none absolute z-20 h-3 w-3 rounded-full border border-black/40 bg-[radial-gradient(circle_at_30%_30%,#fff,#d0d0d0_55%,#777)] shadow ${p}`}
+        />
       ))}
     </>
   );
 }
 
-function ArtFrameDecor({ motif }: { motif: Theme["motif"] }) {
+function BorderMotifStrip({ motif }: { motif: Theme["motif"] }) {
   return (
-    <div className="pointer-events-none absolute inset-0 border border-white/30">
-      <div className="absolute left-1 top-1 text-yellow-300">
-        <MotifIcon motif={motif} size={12} />
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[15px] opacity-90">
+      <div className="absolute left-1 top-8 flex flex-col gap-3 text-black/40">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <span key={`l${i}`} className="block">
+            {i % 2 === 0 ? <MotifIcon motif={motif} size={11} /> : <FriendBadge size={11} />}
+          </span>
+        ))}
       </div>
-      <div className="absolute right-1 top-1 text-yellow-300">
-        <FriendBadge size={12} />
-      </div>
-      <div className="absolute bottom-1 right-1 text-yellow-300">
-        <MotifIcon motif={motif} size={12} />
+      <div className="absolute right-1 top-8 flex flex-col gap-3 text-black/40">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <span key={`r${i}`} className="block">
+            {i % 2 === 0 ? <FriendBadge size={11} /> : <MotifIcon motif={motif} size={11} />}
+          </span>
+        ))}
       </div>
     </div>
+  );
+}
+
+function FrameIconRail({ motif }: { motif: Theme["motif"] }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10">
+      <span className="absolute left-1 top-1 drop-shadow">
+        <MotifIcon motif={motif} size={13} />
+      </span>
+      <span className="absolute right-1 top-1 drop-shadow">
+        <FriendBadge size={13} />
+      </span>
+      <span className="absolute bottom-1 right-1 drop-shadow">
+        <MotifIcon motif={motif} size={13} />
+      </span>
+      <span className="absolute bottom-1 left-[42%] drop-shadow">
+        <FriendBadge size={11} />
+      </span>
+    </div>
+  );
+}
+
+function HazardCorners({ accent }: { accent: string }) {
+  return (
+    <div
+      className="pointer-events-none absolute bottom-0 left-0 right-0 z-20 h-[14px]"
+      style={{
+        background: `repeating-linear-gradient(135deg, #111 0 9px, ${accent} 9px 18px)`,
+        clipPath:
+          "polygon(0 0, 18% 0, 18% 100%, 0 100%, 0 0, 82% 0, 100% 0, 100% 100%, 82% 100%, 82% 0)",
+      }}
+    />
   );
 }

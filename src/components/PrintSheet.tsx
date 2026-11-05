@@ -7,14 +7,14 @@ type Props = {
   data: CardData;
 };
 
-/** 2-up front + back with crop marks, matching the reference sheet layout. */
+/** 2-up front + back with crop marks. */
 export function PrintSheet({ data }: Props) {
   return (
     <div
       className="print-sheet relative mx-auto w-full max-w-[1100px] bg-[#f7f4ef] p-8"
       style={{
         backgroundImage:
-          "radial-gradient(rgba(0,0,0,.04) 1px, transparent 1px)",
+          "radial-gradient(rgba(0,0,0,.045) 1px, transparent 1px)",
         backgroundSize: "12px 12px",
       }}
     >

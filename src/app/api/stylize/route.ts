@@ -1,23 +1,21 @@
-import { gateway } from "@ai-sdk/gateway";
-import { generateText } from "ai";
+import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
 import { NextResponse } from "next/server";
+import { readFile } from "fs/promises";
+import path from "path";
 
 export const maxDuration = 60;
 
 /**
- * Photo → anime/chibi stylization via Vercel AI Gateway.
- * Returns { image: dataUrl } or { fallback: true, reason } when keys/models are missing.
+ * Photo → anime/chibi via Gemini.
+ * Style direction: gemini-4-argon (when available)
+ * Pixels: GEMINI_IMAGE_MODEL (default gemini-3-pro-image) — Argon is text/vision only.
  */
 export async function POST(req: Request) {
-  const hasKey = Boolean(
-    process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN,
-  );
-
-  if (!hasKey) {
+  if (!getGeminiApiKey()) {
     return NextResponse.json({
       fallback: true,
       reason:
-        "AI_GATEWAY_API_KEY (or Vercel OIDC) is not configured. Using local stylization.",
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Parts/print still work with baked art.",
     });
   }
 
@@ -32,56 +30,52 @@ export async function POST(req: Request) {
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = file.type || "image/jpeg";
-    const dataUrl = `data:${mediaType};base64,${bytes.toString("base64")}`;
 
-    const prompt = `Transform this photo into a playful anime chibi trading-card portrait for the Dana & Friends ${theme} theme.
-Keep the person's likeness recognizable but cute: big eyes, soft shading, clean outlines, bright colors.
-Square composition, character centered from chest up, friendly expression.
-No trademarks, no Poké Balls, no copyrighted mascots. Original fan-card art style only.
-Return a single stylized illustration image.`;
+    let referenceImage: { base64: string; mediaType: string } | undefined;
+    try {
+      const refPath = path.join(
+        process.cwd(),
+        "public",
+        "art",
+        `${theme}.jpg`,
+      );
+      const ref = await readFile(refPath);
+      referenceImage = {
+        base64: ref.toString("base64"),
+        mediaType: "image/jpeg",
+      };
+    } catch {
+      /* optional */
+    }
 
-    // Prefer an image-capable gateway model; fall back gracefully on failure.
-    const modelId =
-      process.env.AI_GATEWAY_IMAGE_MODEL || "google/gemini-2.5-flash-image";
-
-    const result = await generateText({
-      model: gateway(modelId),
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image", image: dataUrl },
-          ],
-        },
-      ],
+    const result = await generateChibiImage({
+      theme,
+      mode: "photo",
+      extra:
+        "Keep the person recognizable as a cute anime chibi; chest-up TCG portrait.",
+      sourceImage: {
+        base64: bytes.toString("base64"),
+        mediaType,
+      },
+      referenceImage,
     });
 
-    const fileOut = result.files?.find((f) =>
-      (f.mediaType || "").startsWith("image/"),
-    );
-
-    if (fileOut) {
-      const b64 =
-        typeof fileOut.base64 === "string"
-          ? fileOut.base64
-          : Buffer.from(fileOut.uint8Array).toString("base64");
+    if (!result.ok) {
       return NextResponse.json({
-        image: `data:${fileOut.mediaType};base64,${b64}`,
-        provider: "ai-gateway",
-        model: modelId,
+        fallback: true,
+        reason: result.reason,
+        billing: result.billing || false,
       });
     }
 
     return NextResponse.json({
-      fallback: true,
-      reason: "Model returned no image; using local stylization.",
+      image: result.image,
+      provider: "google-gemini",
+      model: result.model,
+      styleModel: process.env.GEMINI_MODEL || "gemini-4-argon",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Stylize failed";
-    return NextResponse.json({
-      fallback: true,
-      reason: message,
-    });
+    return NextResponse.json({ fallback: true, reason: message });
   }
 }
