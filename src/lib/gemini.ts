@@ -5,10 +5,14 @@ import {
   parseRequestedImageModel,
 } from "@/lib/imageModels";
 import {
+  buildNameFriendsBackPrompt,
   buildPhotoPrintSheetPrompt,
+  buildPortraitPrompt,
   type PhotoPrintSheetFields,
 } from "@/lib/photoStylizePrompt";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
+
+export type PhotoGenKind = "sheet" | "name-back" | "portrait";
 
 export function getGeminiApiKey(): string | undefined {
   return (
@@ -71,9 +75,16 @@ export async function buildChibiPrompt(input: {
   partsSummary?: string;
   extra?: string;
   cardFields?: PhotoPrintSheetFields;
+  photoKind?: PhotoGenKind;
 }): Promise<string> {
-  // Photo mode: full A4 print-sheet prompt (see generateChibiImage).
+  // Photo mode: pick sheet / name-back / portrait template.
   if (input.mode === "photo") {
+    if (input.photoKind === "name-back") {
+      return buildNameFriendsBackPrompt(input.cardFields);
+    }
+    if (input.photoKind === "portrait") {
+      return buildPortraitPrompt(input.cardFields);
+    }
     return buildPhotoPrintSheetPrompt(input.cardFields);
   }
 
@@ -235,6 +246,8 @@ export async function generateChibiImage(opts: {
   imageModel?: string | null;
   /** Name / HP / attacks — only these strings may replace defaults in the A4 prompt. */
   cardFields?: PhotoPrintSheetFields;
+  /** Which photo prompt to use. Default: A4 sheet with Dana & Friends back. */
+  photoKind?: PhotoGenKind;
 }): Promise<GeminiImageResult> {
   const google = getGeminiClient();
   if (!google) {
@@ -253,11 +266,16 @@ export async function generateChibiImage(opts: {
   const model = resolved.id;
 
   const isPhoto = opts.mode === "photo" && !!opts.sourceImage;
+  const photoKind = opts.photoKind || "sheet";
 
-  // Photo path: verbatim A4 print-sheet prompt + attached photo (never text-only).
+  // Photo path: template + attached photo (never text-only).
   // Parts path: still builds a compose prompt (may invent character from parts).
   const prompt = isPhoto
-    ? buildPhotoPrintSheetPrompt(opts.cardFields)
+    ? photoKind === "name-back"
+      ? buildNameFriendsBackPrompt(opts.cardFields)
+      : photoKind === "portrait"
+        ? buildPortraitPrompt(opts.cardFields)
+        : buildPhotoPrintSheetPrompt(opts.cardFields)
     : await buildChibiPrompt({
         theme: opts.theme,
         mode: opts.mode,

@@ -6,6 +6,12 @@ import type { PaletteId, Theme } from "@/lib/themes";
 type Props = {
   theme: Theme;
   className?: string;
+  /** Back title. Brand default: "Dana & Friends". */
+  title?: string;
+  /** Footer line under the tagline. */
+  footer?: string;
+  /** Optional center art override (stylized portrait / generated back). */
+  artUrl?: string | null;
 };
 
 /** Painted kid + original friends — fills the back art plane per palette. */
@@ -17,11 +23,16 @@ const BACK_ART: Record<PaletteId, string> = {
 };
 
 /**
- * Dense Dana & Friends play back (not invitation/QR).
+ * Dense play back (not invitation/QR).
  * Title → full-bleed illustration → slogan → tagline → footer.
- * Nothing clips at phone or desktop sizes.
  */
-export function CardBack({ theme, className }: Props) {
+export function CardBack({
+  theme,
+  className,
+  title = "Dana & Friends",
+  footer = "Dana’s Special Card • 2026",
+  artUrl,
+}: Props) {
   const ink = theme.id === "aura" ? "#EAF0FF" : theme.text;
   const field = theme.id === "aura" ? theme.panel : "#FFF8E8";
   const titleClass =
@@ -34,6 +45,7 @@ export function CardBack({ theme, className }: Props) {
           : "card-back-title--sparkle";
   const sloganColor = theme.id === "aura" ? "#FFE56A" : theme.accentDeep;
   const footerColor = theme.id === "aura" ? "#A8C4FF" : theme.accentDeep;
+  const centerArt = artUrl || BACK_ART[theme.id];
 
   return (
     <article
@@ -44,11 +56,6 @@ export function CardBack({ theme, className }: Props) {
       }}
       data-card-side="back"
     >
-      {/*
-        Absolute inset panel with CSS grid so the illustration takes ALL leftover
-        height (1fr) while title/slogan/tagline/footer stay fully visible above
-        the hazard stripe — no tiny square inset, no clipped slogan.
-      */}
       <div
         className="absolute inset-[7px] bottom-[11px] grid grid-rows-[auto_minmax(0,1fr)_auto_auto_auto] gap-[2px] rounded-[11px] border-[2.5px] px-1.5 pb-1 pt-1.5 sm:inset-[10px] sm:bottom-[14px] sm:gap-[3px] sm:rounded-[14px] sm:border-[3px] sm:px-2 sm:pb-1.5 sm:pt-2"
         style={{
@@ -73,18 +80,17 @@ export function CardBack({ theme, className }: Props) {
         <h2
           className={`font-display relative z-10 px-2 text-center text-[0.95rem] font-bold leading-[1.05] tracking-tight sm:px-3 sm:text-[1.45rem] ${titleClass}`}
         >
-          Dana &amp; Friends
+          {title}
         </h2>
 
-        {/* Fills every leftover pixel — dense like the print reference */}
         <div
           className="relative z-10 min-h-0 w-full overflow-hidden rounded-[8px] border-[2px] sm:rounded-[12px] sm:border-[2.5px]"
           style={{ borderColor: theme.accentDeep, background: theme.accentSoft }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={BACK_ART[theme.id]}
-            alt="Kid in theme hoodie with original friend creatures"
+            src={centerArt}
+            alt={`${title} card back art`}
             className="absolute inset-0 h-full w-full object-cover object-[center_26%]"
             draggable={false}
           />
@@ -112,7 +118,7 @@ export function CardBack({ theme, className }: Props) {
           className="relative z-10 px-1 pb-0.5 text-center text-[0.42rem] font-bold uppercase leading-tight tracking-[0.08em] opacity-90 sm:text-[0.55rem] sm:tracking-[0.1em]"
           style={{ color: footerColor }}
         >
-          Dana’s Special Card • 2026
+          {footer}
         </p>
       </div>
 

@@ -1,7 +1,7 @@
 import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 export async function POST(req: Request) {
   if (!getGeminiApiKey()) {
@@ -39,54 +39,80 @@ export async function POST(req: Request) {
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = file.type || "image/jpeg";
-
-    // Photo + live-form A4 print-sheet template. Returns a full sheet image
-    // (front left / back right) — not a portrait for the art frame.
-    const result = await generateChibiImage({
-      theme: palette,
-      mode: "photo",
+    const sourceImage = {
+      base64: bytes.toString("base64"),
+      mediaType,
+    };
+    const cardFields = {
+      paletteId: palette,
+      name,
+      hp,
       typeLabel,
-      sourceImage: {
-        base64: bytes.toString("base64"),
-        mediaType,
-      },
+      caption,
+      attack1Name,
+      attack1Damage,
+      attack1Text,
+      attack2Name,
+      attack2Damage,
+      attack2Text,
+      weakness,
+      resistance,
+      retreat,
+    };
+    const common = {
+      theme: palette,
+      mode: "photo" as const,
+      typeLabel,
+      sourceImage,
       imageModel: imageModel || undefined,
-      cardFields: {
-        paletteId: palette,
-        name,
-        hp,
-        typeLabel,
-        caption,
-        attack1Name,
-        attack1Damage,
-        attack1Text,
-        attack2Name,
-        attack2Damage,
-        attack2Text,
-        weakness,
-        resistance,
-        retreat,
-      },
-    });
+      cardFields,
+    };
 
-    if (!result.ok) {
+    // Sheet (front + Dana & Friends back), name back, and portrait in parallel.
+    // One failure must not wipe the others.
+    const [sheetR, nameBackR, portraitR] = await Promise.all([
+      generateChibiImage({ ...common, photoKind: "sheet" }),
+      generateChibiImage({ ...common, photoKind: "name-back" }),
+      generateChibiImage({ ...common, photoKind: "portrait" }),
+    ]);
+
+    if (!sheetR.ok && !nameBackR.ok && !portraitR.ok) {
+      const fail = sheetR.ok
+        ? null
+        : sheetR;
       return NextResponse.json({
         fallback: true,
-        reason: result.reason,
-        billing: result.billing || false,
-        httpStatus: result.httpStatus,
-        errorKind: result.errorKind,
+        reason: fail && !fail.ok ? fail.reason : "All image generations failed",
+        billing: fail && !fail.ok ? fail.billing || false : false,
+        httpStatus: fail && !fail.ok ? fail.httpStatus : undefined,
+        errorKind: fail && !fail.ok ? fail.errorKind : undefined,
       });
     }
 
     return NextResponse.json({
-      image: result.image,
+      image: sheetR.ok ? sheetR.image : undefined,
       kind: "print-sheet",
+      nameBack: nameBackR.ok ? nameBackR.image : undefined,
+      portrait: portraitR.ok ? portraitR.image : undefined,
       provider: "google-gemini",
-      model: result.model,
+      model: sheetR.ok
+        ? sheetR.model
+        : portraitR.ok
+          ? portraitR.model
+          : nameBackR.ok
+            ? nameBackR.model
+            : undefined,
       styleModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-      // Echo prompt text only (no keys / no image bytes) for debugging.
-      prompt: result.prompt,
+      prompt: sheetR.ok ? sheetR.prompt : undefined,
+      nameBackPrompt: nameBackR.ok ? nameBackR.prompt : undefined,
+      portraitPrompt: portraitR.ok ? portraitR.prompt : undefined,
+      partial: {
+        sheet: sheetR.ok,
+        nameBack: nameBackR.ok,
+        portrait: portraitR.ok,
+      },
+      // Surface first failure reason if sheet missing but others ok.
+      reason: !sheetR.ok && "reason" in sheetR ? sheetR.reason : undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Stylize failed";

@@ -80,8 +80,14 @@ export function CardStudio() {
   const [showPrint, setShowPrint] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
-  /** Gemini A4 sheet (front+back). Never cropped into the art frame. */
+  /** Gemini A4 sheet (front + Dana & Friends back). Never cropped into art frame. */
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  /** Separate "{name} & Friends" back image. */
+  const [nameBackUrl, setNameBackUrl] = useState<string | null>(null);
+  /** Stylized portrait for the live front art frame (and composed backs). */
+  const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
+  /** Which back is emphasized in the small preview. */
+  const [backPreview, setBackPreview] = useState<"dana" | "name">("dana");
   /** Select value: a preset label, or CAPTION_AI_VALUE while AI is chosen. */
   const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
 
@@ -267,6 +273,8 @@ export function CardStudio() {
       let json: {
         image?: string;
         kind?: string;
+        nameBack?: string;
+        portrait?: string;
         reason?: string;
         billing?: boolean;
         httpStatus?: number;
@@ -275,6 +283,7 @@ export function CardStudio() {
         message?: string;
         error?: string;
         prompt?: string;
+        partial?: { sheet?: boolean; nameBack?: boolean; portrait?: boolean };
       } = {};
       try {
         json = (await res.json()) as typeof json;
@@ -282,6 +291,16 @@ export function CardStudio() {
         json = {};
       }
       const reason = json.reason || json.message || json.error || null;
+      if (json.portrait) {
+        setPortraitUrl(json.portrait);
+        setArtUrl(json.portrait);
+        setArtPlan(null);
+        if (previewUrlRef.current) {
+          URL.revokeObjectURL(previewUrlRef.current);
+          previewUrlRef.current = null;
+        }
+      }
+      if (json.nameBack) setNameBackUrl(json.nameBack);
       if (json.image) {
         // Full A4 sheet — show/download as print sheet, never crop into art box.
         setSheetUrl(json.image);
@@ -290,6 +309,13 @@ export function CardStudio() {
           console.info("[stylize] prompt:\n" + json.prompt);
         }
         setStatus(stylizeSuccess(json.model));
+      } else if (json.portrait || json.nameBack) {
+        setShowPrint(true);
+        setStatus({
+          kind: "success",
+          en: "Partial Gemini result — portrait and/or name back ready; A4 sheet failed.",
+          ko: "일부 결과만 성공 — 초상/이름 뒷면은 준비됨, A4 시트는 실패.",
+        });
       } else {
         // Keep photo preview on the card; show exact Gemini failure (402 vs 429 vs other)
         setStatus(
@@ -571,11 +597,46 @@ export function CardStudio() {
           </div>
 
           <div className="mx-auto w-full max-w-[400px] space-y-3">
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBackPreview("dana")}
+                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  backPreview === "dana"
+                    ? "bg-black text-white"
+                    : "bg-black/5 text-black/55"
+                }`}
+              >
+                Dana &amp; Friends
+              </button>
+              <button
+                type="button"
+                onClick={() => setBackPreview("name")}
+                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  backPreview === "name"
+                    ? "bg-black text-white"
+                    : "bg-black/5 text-black/55"
+                }`}
+              >
+                {(draft.name.trim() || "FRIEND") + " & Friends"}
+              </button>
+            </div>
             <div>
-              <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/50">
-                Back
-              </p>
-              <CardBack theme={theme} />
+              {backPreview === "dana" ? (
+                <CardBack
+                  theme={theme}
+                  title="Dana & Friends"
+                  footer="Dana’s Special Card • 2026"
+                  artUrl={portraitUrl}
+                />
+              ) : (
+                <CardBack
+                  theme={theme}
+                  title={`${(draft.name.trim() || "FRIEND")} & Friends`}
+                  footer={`${(draft.name.trim() || "FRIEND").toUpperCase()}'S SPECIAL CARD • 2026`}
+                  artUrl={nameBackUrl || portraitUrl}
+                />
+              )}
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
@@ -929,15 +990,18 @@ export function CardStudio() {
         }
         aria-hidden={!showPrint}
       >
-        <PrintSheet data={data} />
+        <PrintSheet
+          data={data}
+          cardName={draft.name}
+          backArtUrl={portraitUrl}
+          nameBackArtUrl={nameBackUrl}
+        />
       </div>
 
       {showPrint && (
-        <div className="space-y-2">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-2xl font-bold">
-              {sheetUrl ? "Gemini A4 print sheet" : "Print sheet"}
-            </h2>
+            <h2 className="font-display text-2xl font-bold">Print sheet</h2>
             <button
               type="button"
               className="text-sm font-bold underline"
@@ -947,15 +1011,42 @@ export function CardStudio() {
             </button>
           </div>
           {sheetUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={sheetUrl}
-              alt="Gemini A4 print sheet — front and back"
-              className="w-full rounded-2xl border border-black/10 bg-white shadow"
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+                Gemini A4 — front + Dana &amp; Friends back
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={sheetUrl}
+                alt="Gemini A4 print sheet — front and Dana & Friends back"
+                className="w-full rounded-2xl border border-black/10 bg-white shadow"
+              />
+            </div>
+          ) : null}
+          {nameBackUrl ? (
+            <div className="mx-auto w-full max-w-[360px] space-y-2">
+              <p className="text-center text-xs font-bold uppercase tracking-wider text-black/50">
+                {(draft.name.trim() || "FRIEND") + " & Friends"} back
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={nameBackUrl}
+                alt={`${draft.name.trim() || "FRIEND"} & Friends card back`}
+                className="w-full rounded-2xl border border-black/10 bg-white shadow"
+              />
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+              Studio sheet — front + both backs (dashed fold lines, white page)
+            </p>
+            <PrintSheet
+              data={data}
+              cardName={draft.name}
+              backArtUrl={portraitUrl}
+              nameBackArtUrl={nameBackUrl}
             />
-          ) : (
-            <PrintSheet data={data} />
-          )}
+          </div>
         </div>
       )}
     </div>
