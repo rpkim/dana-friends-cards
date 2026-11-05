@@ -26,7 +26,11 @@ import {
   printDataUrl,
   printNode,
 } from "@/lib/exportCard";
-import { STARTER_ART } from "@/lib/parts";
+import {
+  ACCESSORY_OPTIONS,
+  STARTER_ART,
+  getPart,
+} from "@/lib/parts";
 import {
   DEFAULT_IMAGE_MODEL_ID,
   IMAGE_MODEL_OPTIONS,
@@ -103,6 +107,9 @@ export function CardStudio() {
   const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
   /** Random HP + caption preset + chrome palette on generate / when toggled on. */
   const [randomTrio, setRandomTrio] = useState(false);
+  /** Two independent attach slots (accessories) for photo stylize. */
+  const [attach1, setAttach1] = useState("acc-none");
+  const [attach2, setAttach2] = useState("acc-none");
 
   useEffect(() => {
     setImageModel(readStoredImageModel());
@@ -323,6 +330,14 @@ export function CardStudio() {
       form.append("weakness", draft.weakness);
       form.append("resistance", draft.resistance);
       form.append("retreat", String(draft.retreat));
+      const a1 = getPart(attach1);
+      const a2 = getPart(attach2);
+      if (a1?.accessoryKind && a1.accessoryKind !== "none") {
+        form.append("accessory1", a1.prompt);
+      }
+      if (a2?.accessoryKind && a2.accessoryKind !== "none") {
+        form.append("accessory2", a2.prompt);
+      }
       const res = await fetch("/api/stylize", { method: "POST", body: form });
       let json: {
         image?: string;
@@ -725,6 +740,55 @@ export function CardStudio() {
               </span>
             </span>
           </label>
+
+          <div className="space-y-3">
+            {(
+              [
+                {
+                  id: "attach1" as const,
+                  label: "Attach 1",
+                  value: attach1,
+                  set: setAttach1,
+                },
+                {
+                  id: "attach2" as const,
+                  label: "Attach 2",
+                  value: attach2,
+                  set: setAttach2,
+                },
+              ] as const
+            ).map((slot) => (
+              <div key={slot.id} className="space-y-2" data-field={slot.id}>
+                <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+                  {slot.label}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ACCESSORY_OPTIONS.map((opt) => {
+                    const active = slot.value === opt.id;
+                    return (
+                      <button
+                        key={`${slot.id}-${opt.id}`}
+                        type="button"
+                        onClick={() => slot.set(opt.id)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
+                          active
+                            ? "border-black bg-black text-white"
+                            : "border-black/15 bg-white"
+                        }`}
+                        aria-pressed={active}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] font-medium text-black/55">
+              Pick up to two attaches. Both go into the Gemini portrait / print
+              prompt (independent — they do not wipe each other).
+            </p>
+          </div>
 
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-black/50">

@@ -62,6 +62,8 @@ export async function POST(req: Request) {
     const weakness = String(form.get("weakness") || "");
     const resistance = String(form.get("resistance") || "");
     const retreat = String(form.get("retreat") || "");
+    const accessory1 = String(form.get("accessory1") || "");
+    const accessory2 = String(form.get("accessory2") || "");
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
@@ -88,6 +90,8 @@ export async function POST(req: Request) {
       weakness,
       resistance,
       retreat,
+      accessory1,
+      accessory2,
     };
     const friendsRef = await loadFriendsReference(palette);
     const common = {

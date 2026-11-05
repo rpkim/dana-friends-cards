@@ -25,6 +25,7 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
    - Subject: Stylize the person in the provided user photo as a cute anime/chibi character (referencing the input image while preserving recognizable facial features, hair, and smile).
    - NEVER paste or embed the raw photograph — the front art must be a stylized illustrated portrait of the same person.
    - Character Outfit: Wearing a cute hoodie matching the theme.
+   - Accessories (Attach 1 + Attach 2 — draw BOTH when listed): {ACCESSORIES}.
    - Caption Badge inside/below art box: "{CAPTION_UNDER_ART}".
 4. Attack & Stats Area:
    - Standard TCG attack layout with skill names, descriptions, damage numbers, weakness, and retreat stats matching the card theme.
@@ -35,7 +36,7 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
 [CARD 2 - BACK DESIGN — BRAND TITLE, DO NOT RENAME]
 1. Frame Style: Matching {CHROME_PALETTE_STYLE} border frame and background pattern consistent with the front card.
 2. Top Title: Exactly "Dana & Friends" in large, adorable 3D cartoon font. Do NOT replace "Dana" with "{CARD_NAME}" or any other name.
-3. Center Graphic Box: Cute chibi illustration of the SAME person from the photo (same face/hair as the front stylized portrait) wearing the theme hoodie, surrounded by cute original anime mascot friends, celebrating together. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme). Natural skin on the face — no blue/cyan face paint or theme-color skin wash.
+3. Center Graphic Box: Cute chibi illustration of the SAME person from the photo (same face/hair as the front stylized portrait) wearing the theme hoodie, surrounded by cute original anime mascot friends, celebrating together. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme). Natural skin on the face — no blue/cyan face paint or theme-color skin wash. Accessories if listed: {ACCESSORIES}.
 4. Bottom Text: "LET'S PLAY TOGETHER!" and exactly "DANA'S SPECIAL CARD • 2026".
 
 [STRICT CONSTRAINTS]
@@ -58,7 +59,7 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
 [BACK DESIGN]
 1. Frame Style: Authentic TCG card back frame with {CHROME_PALETTE_STYLE} border and matching background pattern.
 2. Top Title: Exactly "{CARD_NAME} & Friends" in large, adorable 3D cartoon font.
-3. Center Graphic Box: Cute chibi illustration of the SAME person from the provided photo (preserve recognizable face, hair, smile, natural skin) wearing a theme-matching hoodie, surrounded by cute original anime mascot friends celebrating. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme).
+3. Center Graphic Box: Cute chibi illustration of the SAME person from the provided photo (preserve recognizable face, hair, smile, natural skin) wearing a theme-matching hoodie, surrounded by cute original anime mascot friends celebrating. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme). Accessories if listed: {ACCESSORIES}.
 4. Bottom Text: "LET'S PLAY TOGETHER!" and "{CARD_NAME}'S SPECIAL CARD • 2026".
 
 [STRICT CONSTRAINTS]
@@ -80,6 +81,7 @@ Stylize the person in the provided photo as a single cute anime/chibi trading-ca
 - Same person as the photo: keep face, hair, natural skin tone, expression recognizable.
 - Full head and face visible. Soft cel shading, clean linework.
 - SKIN RULE (critical): Face and hands must be natural warm peach / light tan human skin. Do NOT apply cyan, blue, ice, pink, or yellow tint/wash/glow/paint across the face. Blue lighting in the background must not turn the cheeks blue.
+- Accessories (Attach 1 + Attach 2 — include BOTH when listed): {ACCESSORIES}.
 - Simple theme-matching background. No card frame, no text, no letters, no watermark.
 - NEVER output a raw/unedited photograph.`;
 
@@ -101,6 +103,7 @@ This is NOT a full card. No card frame, no title text, no "Dana & Friends", no n
 - Draw them as a full chibi/anime character standing/celebrating in the scene — head, hair, torso, and theme hoodie as one continuous drawing.
 - SKIN RULE (critical): Face, cheeks, nose, forehead, neck, and hands are natural warm peach / light tan. NO cyan/blue face mask, NO blue blush wash, NO ice glow on skin, NO rectangular blue tint over the face. Soft pink cheek blush is OK.
 - Surround them densely with cute original anime mascot friends filling the frame: fluffy bunny, leafy fox, sprinkle donut buddy, smiling cloud pals, and similar friends crowded close (pink/orange/yellow accents on mascots are OK).
+- Accessories on the central kid (Attach 1 + Attach 2 — include BOTH when listed): {ACCESSORIES}.
 - Magical theme-matching background (stars / sparkles / soft glow) behind the group.
 - Soft cel shading, clean linework, LOHA/Dana-friends polish.
 
@@ -163,6 +166,10 @@ export type PhotoPrintSheetFields = {
   weakness?: string;
   resistance?: string;
   retreat?: number | string;
+  /** Optional Attach 1 prompt line (accessory slot 1). */
+  accessory1?: string;
+  /** Optional Attach 2 prompt line (accessory slot 2). */
+  accessory2?: string;
 };
 
 function fill(template: string, key: string, value: string): string {
@@ -187,6 +194,9 @@ function resolveFields(fields: PhotoPrintSheetFields = {}) {
   const weakness = (fields.weakness ?? "").trim() || "Dark ×2";
   const resistance = (fields.resistance ?? "").trim() || "—";
   const retreat = String(fields.retreat ?? 1).trim() || "1";
+  const acc1 = (fields.accessory1 ?? "").trim();
+  const acc2 = (fields.accessory2 ?? "").trim();
+  const accessories = [acc1, acc2].filter(Boolean).join("; ") || "none";
   return {
     chrome,
     cardName,
@@ -202,15 +212,12 @@ function resolveFields(fields: PhotoPrintSheetFields = {}) {
     weakness,
     resistance,
     retreat,
+    accessories,
   };
 }
 
-/** A4 sheet: front + Dana & Friends back (brand title never renamed). */
-export function buildPhotoPrintSheetPrompt(
-  fields: PhotoPrintSheetFields = {},
-): string {
-  const f = resolveFields(fields);
-  let prompt = PHOTO_PRINT_SHEET_TEMPLATE;
+function applyCommonFields(template: string, f: ReturnType<typeof resolveFields>): string {
+  let prompt = template;
   prompt = fill(prompt, "CHROME_PALETTE_STYLE", f.chrome.chromePaletteStyle);
   prompt = fill(prompt, "CHROME_PALETTE", f.chrome.chromePalette);
   prompt = fill(prompt, "CARD_NAME", f.cardName);
@@ -226,43 +233,36 @@ export function buildPhotoPrintSheetPrompt(
   prompt = fill(prompt, "WEAKNESS", f.weakness);
   prompt = fill(prompt, "RESISTANCE", f.resistance);
   prompt = fill(prompt, "RETREAT", f.retreat);
+  prompt = fill(prompt, "ACCESSORIES", f.accessories);
   return prompt;
+}
+
+/** A4 sheet: front + Dana & Friends back (brand title never renamed). */
+export function buildPhotoPrintSheetPrompt(
+  fields: PhotoPrintSheetFields = {},
+): string {
+  return applyCommonFields(PHOTO_PRINT_SHEET_TEMPLATE, resolveFields(fields));
 }
 
 /** Single back titled "{CARD_NAME} & Friends". */
 export function buildNameFriendsBackPrompt(
   fields: PhotoPrintSheetFields = {},
 ): string {
-  const f = resolveFields(fields);
-  let prompt = PHOTO_NAME_BACK_TEMPLATE;
-  prompt = fill(prompt, "CHROME_PALETTE_STYLE", f.chrome.chromePaletteStyle);
-  prompt = fill(prompt, "CHROME_PALETTE", f.chrome.chromePalette);
-  prompt = fill(prompt, "CARD_NAME", f.cardName);
-  return prompt;
+  return applyCommonFields(PHOTO_NAME_BACK_TEMPLATE, resolveFields(fields));
 }
 
 /** Portrait for the live front art frame. */
 export function buildPortraitPrompt(
   fields: PhotoPrintSheetFields = {},
 ): string {
-  const f = resolveFields(fields);
-  return fill(
-    PHOTO_PORTRAIT_TEMPLATE,
-    "CHROME_PALETTE_STYLE",
-    f.chrome.chromePaletteStyle,
-  );
+  return applyCommonFields(PHOTO_PORTRAIT_TEMPLATE, resolveFields(fields));
 }
 
 /** Shared back center art: stylized kid among mascot friends (no frame/title). */
 export function buildFriendsScenePrompt(
   fields: PhotoPrintSheetFields = {},
 ): string {
-  const f = resolveFields(fields);
-  return fill(
-    PHOTO_FRIENDS_SCENE_TEMPLATE,
-    "CHROME_PALETTE_STYLE",
-    f.chrome.chromePaletteStyle,
-  );
+  return applyCommonFields(PHOTO_FRIENDS_SCENE_TEMPLATE, resolveFields(fields));
 }
 
 /** @deprecated theme/type suffix removed — template is self-contained. */

@@ -58,8 +58,8 @@ export type ArtPlan = {
 export const PART_CATEGORIES: { id: PartCategory; label: string }[] = [
   { id: "look", label: "Look" },
   { id: "outfit", label: "Outfit" },
-  { id: "accessory1", label: "Accessory 1" },
-  { id: "accessory2", label: "Accessory 2" },
+  { id: "accessory1", label: "Attach 1" },
+  { id: "accessory2", label: "Attach 2" },
   { id: "backdrop", label: "Backdrop" },
 ];
 
