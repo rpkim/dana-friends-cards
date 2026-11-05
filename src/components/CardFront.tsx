@@ -2,6 +2,7 @@
 
 import { FriendBadge, MotifIcon } from "@/components/MotifIcon";
 import { CharacterStage } from "@/components/CharacterStage";
+import type { ArtPlan } from "@/lib/parts";
 import type { Theme } from "@/lib/themes";
 
 export type CardData = {
@@ -10,6 +11,8 @@ export type CardData = {
   customHp?: number;
   artUrl: string;
   artBusy?: boolean;
+  /** Parts-mixer composition plan (overlays). Omit for photo/Gemini results. */
+  artPlan?: ArtPlan | null;
 };
 
 type Props = {
@@ -22,7 +25,7 @@ type Props = {
  * outlined display name, type pill, art frame, Attack 1/2 pills, themed stats.
  */
 export function CardFront({ data, className }: Props) {
-  const { theme, artUrl } = data;
+  const { theme, artUrl, artPlan } = data;
   const name = (data.customName || theme.name).toUpperCase() || "FRIEND";
   const hp = data.customHp ?? theme.hp;
   const isDark = theme.id === "aura";
@@ -94,7 +97,7 @@ export function CardFront({ data, className }: Props) {
           aspectRatio: "1.08 / 1",
         }}
       >
-        <CharacterStage artUrl={artUrl} />
+        <CharacterStage artUrl={artUrl} artPlan={artPlan} />
         {data.artBusy && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45 px-3 text-center">
             <p className="rounded-xl bg-white/95 px-3 py-2 text-[11px] font-extrabold text-black shadow">

@@ -16,20 +16,24 @@ export function getGeminiClient() {
   return createGoogleGenerativeAI({ apiKey });
 }
 
-/** Preferred style model (Argon). Falls back to a free-tier text model when Argon is quota-blocked. */
+/**
+ * Primary style model: Flash (Argon hits free-tier limit:0 on this project).
+ * Override with GEMINI_MODEL if Argon/billing becomes available later.
+ */
 export function styleModelId() {
-  return process.env.GEMINI_MODEL || "gemini-4-argon";
+  return process.env.GEMINI_MODEL || "gemini-2.5-flash";
 }
 
 export function styleFallbackModelId() {
-  return process.env.GEMINI_STYLE_FALLBACK_MODEL || "gemini-2.5-flash";
+  return process.env.GEMINI_STYLE_FALLBACK_MODEL || "gemini-3.5-flash";
 }
 
+/** Primary image model: Flash image. Argon/Pro-image kept as later optional fallbacks. */
 export function imageModelId() {
-  return process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image";
+  return process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
 }
 
-/** Alternate image models to try when the primary returns free-tier limit:0 / 429. */
+/** Try Flash image variants first; Argon/Pro only as optional later fallbacks. */
 export function imageFallbackModelIds(): string[] {
   const raw = process.env.GEMINI_IMAGE_FALLBACK_MODELS || "";
   const listed = raw
@@ -37,9 +41,13 @@ export function imageFallbackModelIds(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   const defaults = [
-    "gemini-3-pro-image",
-    "gemini-3.1-flash-image",
     "gemini-2.5-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3.1-flash-image-preview",
+    // optional later if billing unlocks them:
+    "gemini-3-pro-image",
+    "gemini-4-argon",
   ];
   const primary = imageModelId();
   return [...new Set([primary, ...listed, ...defaults])];
@@ -151,39 +159,31 @@ function classifySdkError(err: unknown): {
 
   const combined = `${message}\n${bodyMsg}`;
 
+  // Classify 429 / free-tier BEFORE any 402/prepay heuristics
   if (
-    httpStatus === 402 ||
-    /prepayment credits are depleted/i.test(combined)
+    httpStatus === 429 ||
+    /free_tier_.*limit:\s*0|generate_content_free_tier/i.test(combined) ||
+    (/resource_exhausted/i.test(combined) && httpStatus !== 402)
   ) {
+    const isImageQuota =
+      /free_tier|limit:\s*0|image|argon|imagen/i.test(combined) ||
+      httpStatus === 429;
+    return {
+      message: isImageQuota
+        ? "Image model quota is 0 on this API project (free tier). Enable billing / image generation for this key’s Google AI Studio project."
+        : bodyMsg || message,
+      httpStatus: httpStatus || 429,
+      errorKind: isImageQuota ? "free_tier_image_quota" : "rate_limit",
+      billing: false,
+    };
+  }
+
+  if (httpStatus === 402) {
     return {
       message: bodyMsg || message,
-      httpStatus: httpStatus || 402,
+      httpStatus: 402,
       errorKind: "prepay_402",
       billing: true,
-    };
-  }
-
-  if (
-    /free_tier_.*limit:\s*0|generate_content_free_tier/i.test(combined) ||
-    (httpStatus === 429 &&
-      /quota exceeded|resource_exhausted/i.test(combined) &&
-      /image|argon|free_tier/i.test(combined))
-  ) {
-    return {
-      message:
-        "Image generation quota is 0 on free tier for this project (HTTP 429). Enable billing/image access in AI Studio.",
-      httpStatus: httpStatus || 429,
-      errorKind: "free_tier_image_quota",
-      billing: false,
-    };
-  }
-
-  if (httpStatus === 429 || /resource_exhausted|\b429\b/i.test(combined)) {
-    return {
-      message: bodyMsg || message,
-      httpStatus: httpStatus || 429,
-      errorKind: "rate_limit",
-      billing: false,
     };
   }
 

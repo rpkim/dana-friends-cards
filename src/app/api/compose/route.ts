@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       image: result.image,
       provider: "google-gemini",
       model: result.model,
-      styleModel: process.env.GEMINI_MODEL || "gemini-4-argon",
+      styleModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Compose failed";

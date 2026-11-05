@@ -17,8 +17,10 @@ import {
   DEFAULT_PARTS,
   PART_CATEGORIES,
   STARTER_ART,
+  artPlanFor,
   fallbackArtFor,
   partsByCategory,
+  type ArtPlan,
   type PartsSelection,
 } from "@/lib/parts";
 import {
@@ -39,6 +41,9 @@ export function CardStudio() {
   const [draft, setDraft] = useState<CardDraft>(() => draftFromPalette("electric"));
   const [parts, setParts] = useState<PartsSelection>(DEFAULT_PARTS);
   const [artUrl, setArtUrl] = useState(STARTER_ART);
+  const [artPlan, setArtPlan] = useState<ArtPlan | null>(() =>
+    artPlanFor(DEFAULT_PARTS),
+  );
   const [exampleRef, setExampleRef] = useState("/examples/dana.webp");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<StatusMsg>(READY_STATUS);
@@ -59,12 +64,26 @@ export function CardStudio() {
     () => ({
       theme,
       artUrl,
-      artBusy: busy && mode === "photo",
+      artBusy: busy,
+      artPlan: mode === "parts" ? artPlan : null,
       customName: draft.name || undefined,
       customHp: draft.hp,
     }),
-    [theme, artUrl, busy, mode, draft.name, draft.hp],
+    [theme, artUrl, artPlan, busy, mode, draft.name, draft.hp],
   );
+
+  function applyPartsSelection(next: PartsSelection) {
+    const plan = artPlanFor(next);
+    setParts(next);
+    setMode("parts");
+    setArtUrl(plan.artUrl);
+    setArtPlan(plan);
+    setStatus({
+      kind: "ready",
+      en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
+      ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
+    });
+  }
 
   useEffect(() => () => stopCamera(), []);
 
@@ -88,6 +107,7 @@ export function CardStudio() {
     setArtUrl(
       THEME_LIST.find((t) => t.id === ex.paletteId)?.starterArt || STARTER_ART,
     );
+    setArtPlan(null);
     setStatus({
       kind: "ready",
       en: `Inspired by ${ex.title} chrome/palette. Upload a photo or remix parts for YOUR card.`,
@@ -188,6 +208,7 @@ export function CardStudio() {
       const reason = json.reason || json.message || json.error || null;
       if (json.image) {
         setArtUrl(json.image);
+        setArtPlan(null);
         if (previewUrlRef.current) {
           URL.revokeObjectURL(previewUrlRef.current);
           previewUrlRef.current = null;
@@ -250,9 +271,12 @@ export function CardStudio() {
       const reason = json.reason || json.message || json.error || null;
       if (json.image) {
         setArtUrl(json.image);
+        setArtPlan(null);
         setStatus(composeSuccess(json.model));
       } else {
-        setArtUrl(fallbackArtFor(parts));
+        const plan = artPlanFor(parts);
+        setArtUrl(plan.artUrl);
+        setArtPlan(plan);
         const next = fromApiFailure({
           reason,
           billing: json.billing,
@@ -265,7 +289,9 @@ export function CardStudio() {
         setStatus(!explicit && !blocking ? READY_STATUS : next);
       }
     } catch (err) {
-      setArtUrl(fallbackArtFor(parts));
+      const plan = artPlanFor(parts);
+      setArtUrl(plan.artUrl);
+      setArtPlan(plan);
       const next = fromApiFailure({
         reason: err instanceof Error ? err.message : null,
         context: "compose",
@@ -416,15 +442,18 @@ export function CardStudio() {
 
         <aside className="space-y-4 rounded-3xl border border-black/10 bg-white/85 p-4 shadow-sm backdrop-blur md:p-5">
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-black/5 p-1">
-            <ModeButton active={mode === "photo"} onClick={() => setMode("photo")}>
-              1. Photo → Gemini
+            <ModeButton
+              active={mode === "photo"}
+              onClick={() => {
+                setMode("photo");
+                setArtPlan(null);
+              }}
+            >
+              1. Photo → Flash
             </ModeButton>
             <ModeButton
               active={mode === "parts"}
-              onClick={() => {
-                setMode("parts");
-                setArtUrl(fallbackArtFor(parts));
-              }}
+              onClick={() => applyPartsSelection(parts)}
             >
               2. Parts mixer
             </ModeButton>
@@ -505,8 +534,8 @@ export function CardStudio() {
           {mode === "photo" ? (
             <div className="space-y-3">
               <p className="text-sm text-black/70">
-                Capture or upload → Gemini stylizes to anime/chibi and applies it
-                to the art frame (download/print use that result).
+                Capture or upload → Gemini Flash stylizes to anime/chibi and
+                applies it to the art frame (download/print use that result).
               </p>
               <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
                 {cameraOn ? (
@@ -583,11 +612,9 @@ export function CardStudio() {
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => {
-                          const next = { ...parts, [cat.id]: opt.id };
-                          setParts(next);
-                          setArtUrl(fallbackArtFor(next));
-                        }}
+                        onClick={() =>
+                          applyPartsSelection({ ...parts, [cat.id]: opt.id })
+                        }
                         className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
                           parts[cat.id] === opt.id
                             ? "border-black bg-black text-white"
@@ -600,13 +627,17 @@ export function CardStudio() {
                   </div>
                 </div>
               ))}
+              <p className="text-[11px] text-black/60">
+                Chips update the art frame immediately (baked art + overlays).
+                Optional: ask Flash to remix pixels when image quota is available.
+              </p>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void composeFromParts(true)}
                 className="w-full rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
               >
-                Regenerate with Gemini
+                Remix with Gemini Flash
               </button>
             </div>
           )}
