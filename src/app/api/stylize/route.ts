@@ -20,6 +20,9 @@ export async function POST(req: Request) {
     const palette = String(form.get("palette") || form.get("theme") || "electric");
     const typeLabel = String(form.get("typeLabel") || "Custom Type");
     const exampleRef = String(form.get("exampleRef") || "");
+    const imageModel = String(
+      form.get("imageModel") || form.get("GEMINI_IMAGE_MODEL") || "",
+    );
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
@@ -41,6 +44,7 @@ export async function POST(req: Request) {
         mediaType,
       },
       referenceImage,
+      imageModel: imageModel || undefined,
     });
 
     if (!result.ok) {

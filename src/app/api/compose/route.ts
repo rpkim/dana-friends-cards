@@ -22,6 +22,8 @@ export async function POST(req: Request) {
       typeLabel?: string;
       exampleRef?: string;
       parts?: PartsSelection;
+      imageModel?: string;
+      GEMINI_IMAGE_MODEL?: string;
     };
     const palette = body.palette || body.theme || "electric";
     const parts = body.parts;
@@ -51,6 +53,7 @@ export async function POST(req: Request) {
       extra:
         "Compose one polished anime chibi character from the listed parts. Single character, TCG portrait at LOHA/Dana-friends example quality.",
       referenceImage,
+      imageModel: body.imageModel || body.GEMINI_IMAGE_MODEL || undefined,
     });
 
     if (!result.ok) {

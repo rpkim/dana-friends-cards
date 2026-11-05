@@ -1,5 +1,9 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
+import {
+  DEFAULT_IMAGE_MODEL_ID,
+  parseRequestedImageModel,
+} from "@/lib/imageModels";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
 
 export function getGeminiApiKey(): string | undefined {
@@ -28,29 +32,25 @@ export function styleFallbackModelId() {
   return process.env.GEMINI_STYLE_FALLBACK_MODEL || "gemini-3.5-flash";
 }
 
-/** Primary image model: Flash image. Argon/Pro-image kept as later optional fallbacks. */
+/** Env default image model — gemini-3.1-flash-image unless overridden. */
 export function imageModelId() {
-  return process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+  return process.env.GEMINI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL_ID;
 }
 
-/** Try Flash image variants first; Argon/Pro only as optional later fallbacks. */
-export function imageFallbackModelIds(): string[] {
-  const raw = process.env.GEMINI_IMAGE_FALLBACK_MODELS || "";
-  const listed = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const defaults = [
-    "gemini-2.5-flash-image",
-    "gemini-3.1-flash-image",
-    "gemini-3.1-flash-lite-image",
-    "gemini-3.1-flash-image-preview",
-    // optional later if billing unlocks them:
-    "gemini-3-pro-image",
-    "gemini-4-argon",
-  ];
-  const primary = imageModelId();
-  return [...new Set([primary, ...listed, ...defaults])];
+/**
+ * Resolve the single image model for a request.
+ * Per-request picker id wins; otherwise env / default.
+ * Never silently substitutes a different model — invalid ids error out.
+ */
+export function resolveRequestImageModel(
+  requested?: string | null,
+): { ok: true; id: string } | { ok: false; reason: string } {
+  if (requested && requested.trim()) {
+    return parseRequestedImageModel(requested);
+  }
+  const envId = process.env.GEMINI_IMAGE_MODEL?.trim();
+  if (envId) return parseRequestedImageModel(envId);
+  return { ok: true, id: DEFAULT_IMAGE_MODEL_ID };
 }
 
 const STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
@@ -224,6 +224,8 @@ export async function generateChibiImage(opts: {
   extra?: string;
   sourceImage?: { base64: string; mediaType: string };
   referenceImage?: { base64: string; mediaType: string };
+  /** Per-request image model override from the UI picker. */
+  imageModel?: string | null;
 }): Promise<GeminiImageResult> {
   const google = getGeminiClient();
   if (!google) {
@@ -234,6 +236,12 @@ export async function generateChibiImage(opts: {
       errorKind: "other",
     };
   }
+
+  const resolved = resolveRequestImageModel(opts.imageModel);
+  if (!resolved.ok) {
+    return { ok: false, reason: resolved.reason, errorKind: "other" };
+  }
+  const model = resolved.id;
 
   const prompt = await buildChibiPrompt({
     theme: opts.theme,
@@ -270,65 +278,47 @@ export async function generateChibiImage(opts: {
     });
   }
 
-  let lastFail: Extract<GeminiImageResult, { ok: false }> | null = null;
-
-  for (const model of imageFallbackModelIds()) {
-    try {
-      const result = await generateText({
-        model: google(model),
-        providerOptions: {
-          google: {
-            responseModalities: ["TEXT", "IMAGE"],
-          },
+  try {
+    const result = await generateText({
+      model: google(model),
+      providerOptions: {
+        google: {
+          responseModalities: ["TEXT", "IMAGE"],
         },
-        messages: [{ role: "user", content }],
-      });
+      },
+      messages: [{ role: "user", content }],
+    });
 
-      const file = result.files?.find((f) =>
-        (f.mediaType || "").startsWith("image/"),
-      );
-      if (!file) {
-        lastFail = {
-          ok: false,
-          reason: `${model} returned no image. ${result.text?.slice(0, 180) || ""}`.trim(),
-          errorKind: "other",
-        };
-        continue;
-      }
-
-      const b64 =
-        typeof file.base64 === "string"
-          ? file.base64
-          : Buffer.from(file.uint8Array).toString("base64");
-
+    const file = result.files?.find((f) =>
+      (f.mediaType || "").startsWith("image/"),
+    );
+    if (!file) {
       return {
-        ok: true,
-        image: `data:${file.mediaType};base64,${b64}`,
-        model,
-        prompt,
-      };
-    } catch (err) {
-      const classified = classifySdkError(err);
-      lastFail = {
         ok: false,
-        reason: classified.message,
-        billing: classified.billing,
-        httpStatus: classified.httpStatus,
-        errorKind: classified.errorKind,
+        reason: `${model} returned no image. ${result.text?.slice(0, 220) || ""}`.trim(),
+        errorKind: "other",
       };
-      // Try next image model on quota / not-found; stop early on prepay 402 (all keys same project)
-      if (classified.errorKind === "prepay_402") break;
-      continue;
     }
-  }
 
-  return (
-    lastFail || {
+    const b64 =
+      typeof file.base64 === "string"
+        ? file.base64
+        : Buffer.from(file.uint8Array).toString("base64");
+
+    return {
+      ok: true,
+      image: `data:${file.mediaType};base64,${b64}`,
+      model,
+      prompt,
+    };
+  } catch (err) {
+    const classified = classifySdkError(err);
+    return {
       ok: false,
-      reason:
-        "Image generation quota is 0 on free tier for this project (HTTP 429). Enable billing/image access in AI Studio.",
-      httpStatus: 429,
-      errorKind: "free_tier_image_quota",
-    }
-  );
+      reason: `[${model}] ${classified.message}`,
+      billing: classified.billing,
+      httpStatus: classified.httpStatus,
+      errorKind: classified.errorKind,
+    };
+  }
 }

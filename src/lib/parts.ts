@@ -12,10 +12,16 @@ export type PartsSelection = Record<PartCategory, string>;
 export type ArtPlan = {
   /** Base portrait URL for the art frame */
   artUrl: string;
+  /** Look identity tint (always changes when Look chips change) */
+  lookTint: string;
+  /** Outfit color grade wash */
+  outfitWash: string;
   /** Backdrop mood wash over the portrait */
   backdropWash: string;
   /** Soft edge vignette color */
   vignette: string;
+  /** Optional CSS filter on the base portrait (look identity) */
+  lookFilter: string;
   /** Accessory overlay kind */
   accessory: "none" | "shades" | "bow-bag" | "star-pin" | "donut";
   /** Short labels for the selection chip strip */
@@ -187,6 +193,7 @@ export const DEFAULT_PARTS: PartsSelection = {
 
 export const STARTER_ART = "/art/dana.jpg";
 
+/** Look = character identity (always drives a distinct portrait). */
 const LOOK_BASE: Record<string, string> = {
   "look-kid-a": "/art/dana.jpg",
   "look-kid-b": "/art/thea.jpg",
@@ -194,8 +201,12 @@ const LOOK_BASE: Record<string, string> = {
   "look-kid-d": "/art/josephine.jpg",
 };
 
+/**
+ * Outfit-specific baked portraits. Used when the outfit is strongly themed;
+ * Look still applies a tint/filter so Look chips remain visible.
+ */
 const OUTFIT_BASE: Record<string, string> = {
-  "outfit-sunhood": "", // defer to look/backdrop
+  "outfit-sunhood": "", // keep look portrait (each look has a distinct base)
   "outfit-maple": "/art/variants/maple-dress.jpg",
   "outfit-aura": "/art/variants/aura-hoodie.jpg",
   "outfit-kitty": "/art/variants/kitty-hoodie.jpg",
@@ -203,13 +214,34 @@ const OUTFIT_BASE: Record<string, string> = {
   "outfit-night": "/art/ritsuki.jpg",
 };
 
-const BACKDROP_BASE: Record<string, string> = {
-  "bg-sunny": "",
-  "bg-pumpkin": "/art/variants/maple-dress.jpg",
-  "bg-aura": "/art/variants/aura-hoodie.jpg",
-  "bg-blossom": "/art/josephine.jpg",
-  "bg-cafe": "/art/thea.jpg",
-  "bg-night": "/art/ritsuki.jpg",
+/** Look identity tint — always visible even when outfit art replaces the base. */
+const LOOK_TINT: Record<string, string> = {
+  "look-kid-a": "transparent",
+  "look-kid-b": "linear-gradient(180deg, rgba(255,150,60,.22), rgba(180,80,20,.18))",
+  "look-kid-c": "linear-gradient(180deg, rgba(60,100,255,.25), rgba(20,40,120,.2))",
+  "look-kid-d": "linear-gradient(180deg, rgba(255,120,190,.26), rgba(200,60,140,.18))",
+};
+
+const LOOK_FILTER: Record<string, string> = {
+  "look-kid-a": "none",
+  "look-kid-b": "saturate(1.15) hue-rotate(12deg)",
+  "look-kid-c": "saturate(1.05) hue-rotate(-18deg) contrast(1.06)",
+  "look-kid-d": "saturate(1.2) hue-rotate(310deg)",
+};
+
+const OUTFIT_WASH: Record<string, string> = {
+  "outfit-sunhood":
+    "linear-gradient(180deg, rgba(255,220,60,.12), rgba(255,180,0,.08))",
+  "outfit-maple":
+    "linear-gradient(180deg, rgba(220,80,30,.2), rgba(140,40,10,.22))",
+  "outfit-aura":
+    "linear-gradient(180deg, rgba(40,80,255,.22), rgba(10,20,90,.28))",
+  "outfit-kitty":
+    "linear-gradient(180deg, rgba(255,140,200,.22), rgba(220,60,140,.2))",
+  "outfit-snack":
+    "linear-gradient(180deg, rgba(220,160,80,.22), rgba(140,80,30,.2))",
+  "outfit-night":
+    "linear-gradient(180deg, rgba(30,40,110,.28), rgba(5,10,40,.32))",
 };
 
 const BACKDROP_WASH: Record<string, { wash: string; vignette: string }> = {
@@ -218,24 +250,24 @@ const BACKDROP_WASH: Record<string, { wash: string; vignette: string }> = {
     vignette: "rgba(47,107,255,0)",
   },
   "bg-pumpkin": {
-    wash: "linear-gradient(180deg, rgba(255,140,40,.18), rgba(180,60,10,.28))",
-    vignette: "rgba(160,70,10,.45)",
+    wash: "linear-gradient(180deg, rgba(255,140,40,.22), rgba(180,60,10,.32))",
+    vignette: "rgba(160,70,10,.5)",
   },
   "bg-aura": {
-    wash: "linear-gradient(180deg, rgba(40,80,220,.22), rgba(10,20,80,.4))",
-    vignette: "rgba(20,40,140,.5)",
+    wash: "linear-gradient(180deg, rgba(40,80,220,.28), rgba(10,20,80,.45))",
+    vignette: "rgba(20,40,140,.55)",
   },
   "bg-blossom": {
-    wash: "linear-gradient(180deg, rgba(255,160,200,.2), rgba(255,120,170,.28))",
-    vignette: "rgba(220,80,140,.4)",
+    wash: "linear-gradient(180deg, rgba(255,160,200,.24), rgba(255,120,170,.32))",
+    vignette: "rgba(220,80,140,.45)",
   },
   "bg-cafe": {
-    wash: "linear-gradient(180deg, rgba(220,160,80,.2), rgba(120,70,30,.3))",
-    vignette: "rgba(100,55,20,.45)",
+    wash: "linear-gradient(180deg, rgba(220,160,80,.24), rgba(120,70,30,.34))",
+    vignette: "rgba(100,55,20,.5)",
   },
   "bg-night": {
-    wash: "linear-gradient(180deg, rgba(20,30,90,.25), rgba(5,10,40,.45))",
-    vignette: "rgba(5,10,40,.55)",
+    wash: "linear-gradient(180deg, rgba(20,30,90,.3), rgba(5,10,40,.5))",
+    vignette: "rgba(5,10,40,.6)",
   },
 };
 
@@ -250,6 +282,12 @@ const ACCESSORY_KIND: Record<string, ArtPlan["accessory"]> = {
 /**
  * Resolve baked portrait + mood overlays so every chip change is visible
  * even when Gemini image quota is 0.
+ *
+ * Priority:
+ * - Look always picks a distinct base portrait (and tint/filter).
+ * - Strong outfits swap in dedicated baked art, but Look tint/filter still apply.
+ * - Backdrop never replaces the portrait — wash + vignette only.
+ * - Accessory is an overlay.
  */
 export function artPlanFor(parts: PartsSelection): ArtPlan {
   const look = getPart(parts.look);
@@ -257,19 +295,22 @@ export function artPlanFor(parts: PartsSelection): ArtPlan {
   const accessory = getPart(parts.accessory);
   const backdrop = getPart(parts.backdrop);
 
-  const outfitUrl = OUTFIT_BASE[parts.outfit] || "";
-  const backdropUrl = BACKDROP_BASE[parts.backdrop] || "";
   const lookUrl = LOOK_BASE[parts.look] || STARTER_ART;
+  const outfitUrl = OUTFIT_BASE[parts.outfit] || "";
 
-  // Outfit wins when it has dedicated art; else backdrop theme; else look base.
-  const artUrl = outfitUrl || backdropUrl || lookUrl;
+  // Outfit wins only when it has dedicated art; otherwise keep look identity.
+  // Backdrop never overrides the portrait base.
+  const artUrl = outfitUrl || lookUrl;
 
   const mood = BACKDROP_WASH[parts.backdrop] || BACKDROP_WASH["bg-sunny"];
 
   return {
     artUrl,
+    lookTint: LOOK_TINT[parts.look] || "transparent",
+    outfitWash: OUTFIT_WASH[parts.outfit] || "transparent",
     backdropWash: mood.wash,
     vignette: mood.vignette,
+    lookFilter: LOOK_FILTER[parts.look] || "none",
     accessory: ACCESSORY_KIND[parts.accessory] || "none",
     labels: {
       look: look?.label || "Look",

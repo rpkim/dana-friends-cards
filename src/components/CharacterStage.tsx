@@ -5,7 +5,7 @@ import type { ArtPlan } from "@/lib/parts";
 type Props = {
   artUrl: string;
   className?: string;
-  /** When set (parts mixer), apply backdrop wash + accessory overlays */
+  /** When set (parts mixer), apply look/outfit/backdrop/accessory overlays */
   artPlan?: ArtPlan | null;
 };
 
@@ -26,7 +26,28 @@ export function CharacterStage({ artUrl, className, artPlan }: Props) {
         alt="Card art"
         className="card-art-image h-full w-full"
         draggable={false}
+        style={
+          artPlan?.lookFilter && artPlan.lookFilter !== "none"
+            ? { filter: artPlan.lookFilter }
+            : undefined
+        }
       />
+
+      {artPlan && artPlan.lookTint !== "transparent" && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1]"
+          style={{ background: artPlan.lookTint }}
+          aria-hidden
+        />
+      )}
+
+      {artPlan && artPlan.outfitWash !== "transparent" && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1]"
+          style={{ background: artPlan.outfitWash, mixBlendMode: "multiply" }}
+          aria-hidden
+        />
+      )}
 
       {artPlan && artPlan.backdropWash !== "transparent" && (
         <div
@@ -40,7 +61,7 @@ export function CharacterStage({ artUrl, className, artPlan }: Props) {
         <div
           className="pointer-events-none absolute inset-0 z-[1]"
           style={{
-            boxShadow: `inset 0 0 48px 10px ${artPlan.vignette}`,
+            boxShadow: `inset 0 0 52px 12px ${artPlan.vignette}`,
           }}
           aria-hidden
         />
@@ -51,7 +72,7 @@ export function CharacterStage({ artUrl, className, artPlan }: Props) {
       )}
 
       {artPlan && (
-        <div className="pointer-events-none absolute bottom-1.5 left-1/2 z-[3] flex max-w-[92%] -translate-x-1/2 flex-wrap justify-center gap-1">
+        <div className="pointer-events-none absolute bottom-1.5 left-1/2 z-[3] flex max-w-[94%] -translate-x-1/2 flex-wrap justify-center gap-1">
           {[
             artPlan.labels.look,
             artPlan.labels.outfit,
@@ -64,7 +85,7 @@ export function CharacterStage({ artUrl, className, artPlan }: Props) {
             .map((label) => (
               <span
                 key={label as string}
-                className="rounded-full bg-black/70 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-white shadow"
+                className="rounded-full bg-black/75 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-white shadow"
               >
                 {label}
               </span>
@@ -75,11 +96,15 @@ export function CharacterStage({ artUrl, className, artPlan }: Props) {
   );
 }
 
-function AccessoryOverlay({ kind }: { kind: Exclude<ArtPlan["accessory"], "none"> }) {
+function AccessoryOverlay({
+  kind,
+}: {
+  kind: Exclude<ArtPlan["accessory"], "none">;
+}) {
   if (kind === "shades") {
     return (
       <svg
-        className="pointer-events-none absolute left-1/2 top-[34%] z-[2] h-[18%] w-[52%] -translate-x-1/2 drop-shadow"
+        className="pointer-events-none absolute left-1/2 top-[28%] z-[2] h-[12%] w-[42%] -translate-x-1/2 drop-shadow-md"
         viewBox="0 0 120 40"
         aria-hidden
       >
@@ -97,10 +122,11 @@ function AccessoryOverlay({ kind }: { kind: Exclude<ArtPlan["accessory"], "none"
   if (kind === "bow-bag") {
     return (
       <div
-        className="pointer-events-none absolute bottom-[18%] left-[8%] z-[2] flex h-12 w-12 items-center justify-center rounded-xl border-2 border-pink-300 bg-black/85 text-[10px] font-black text-pink-200 shadow-lg"
+        className="pointer-events-none absolute bottom-[16%] left-[6%] z-[2] flex h-14 w-14 flex-col items-center justify-center rounded-2xl border-[3px] border-pink-300 bg-black/90 text-[9px] font-black leading-tight text-pink-200 shadow-lg"
         aria-hidden
       >
-        ♥ bag
+        <span className="text-pink-300">♥</span>
+        bag
       </div>
     );
   }
@@ -108,7 +134,7 @@ function AccessoryOverlay({ kind }: { kind: Exclude<ArtPlan["accessory"], "none"
   if (kind === "star-pin") {
     return (
       <svg
-        className="pointer-events-none absolute bottom-[34%] right-[20%] z-[2] h-9 w-9 drop-shadow"
+        className="pointer-events-none absolute bottom-[30%] right-[16%] z-[2] h-11 w-11 drop-shadow-lg"
         viewBox="0 0 40 40"
         aria-hidden
       >
@@ -125,7 +151,7 @@ function AccessoryOverlay({ kind }: { kind: Exclude<ArtPlan["accessory"], "none"
   // donut
   return (
     <svg
-      className="pointer-events-none absolute bottom-[14%] right-[8%] z-[2] h-12 w-12 drop-shadow"
+      className="pointer-events-none absolute bottom-[12%] right-[6%] z-[2] h-14 w-14 drop-shadow-lg"
       viewBox="0 0 48 48"
       aria-hidden
     >

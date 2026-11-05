@@ -24,6 +24,12 @@ import {
   type PartsSelection,
 } from "@/lib/parts";
 import {
+  DEFAULT_IMAGE_MODEL_ID,
+  IMAGE_MODEL_OPTIONS,
+  IMAGE_MODEL_STORAGE_KEY,
+  isAllowedImageModel,
+} from "@/lib/imageModels";
+import {
   READY_STATUS,
   composeLoading,
   composeSuccess,
@@ -36,6 +42,17 @@ import { THEME_LIST } from "@/lib/themes";
 
 type Mode = "photo" | "parts";
 
+function readStoredImageModel(): string {
+  if (typeof window === "undefined") return DEFAULT_IMAGE_MODEL_ID;
+  try {
+    const raw = window.localStorage.getItem(IMAGE_MODEL_STORAGE_KEY);
+    if (isAllowedImageModel(raw)) return raw;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_IMAGE_MODEL_ID;
+}
+
 export function CardStudio() {
   const [mode, setMode] = useState<Mode>("photo");
   const [draft, setDraft] = useState<CardDraft>(() => draftFromPalette("electric"));
@@ -45,11 +62,24 @@ export function CardStudio() {
     artPlanFor(DEFAULT_PARTS),
   );
   const [exampleRef, setExampleRef] = useState("/examples/dana.webp");
+  const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL_ID);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<StatusMsg>(READY_STATUS);
   const [showPrint, setShowPrint] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
+
+  useEffect(() => {
+    setImageModel(readStoredImageModel());
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(IMAGE_MODEL_STORAGE_KEY, imageModel);
+    } catch {
+      /* ignore */
+    }
+  }, [imageModel]);
 
   const frontRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -72,16 +102,26 @@ export function CardStudio() {
     [theme, artUrl, artPlan, busy, mode, draft.name, draft.hp],
   );
 
-  function applyPartsSelection(next: PartsSelection) {
-    const plan = artPlanFor(next);
-    setParts(next);
-    setMode("parts");
-    setArtUrl(plan.artUrl);
-    setArtPlan(plan);
-    setStatus({
-      kind: "ready",
-      en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
-      ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
+  function applyPartsSelection(
+    patch: Partial<PartsSelection> | ((prev: PartsSelection) => PartsSelection),
+  ) {
+    setParts((prev) => {
+      const next =
+        typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
+      // Defer chrome sync so rapid chip clicks compose via functional updates
+      // instead of clobbering each other with a stale `parts` closure.
+      queueMicrotask(() => {
+        const plan = artPlanFor(next);
+        setMode("parts");
+        setArtUrl(plan.artUrl);
+        setArtPlan(plan);
+        setStatus({
+          kind: "ready",
+          en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
+          ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
+        });
+      });
+      return next;
     });
   }
 
@@ -189,6 +229,7 @@ export function CardStudio() {
       form.append("palette", draft.paletteId);
       form.append("typeLabel", draft.typeLabel);
       form.append("exampleRef", exampleRef);
+      form.append("imageModel", imageModel);
       const res = await fetch("/api/stylize", { method: "POST", body: form });
       let json: {
         image?: string;
@@ -251,6 +292,7 @@ export function CardStudio() {
           typeLabel: draft.typeLabel,
           exampleRef,
           parts,
+          imageModel,
         }),
       });
       let json: {
@@ -453,7 +495,7 @@ export function CardStudio() {
             </ModeButton>
             <ModeButton
               active={mode === "parts"}
-              onClick={() => applyPartsSelection(parts)}
+              onClick={() => applyPartsSelection((prev) => prev)}
             >
               2. Parts mixer
             </ModeButton>
@@ -529,6 +571,49 @@ export function CardStudio() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+              Image model
+            </p>
+            <div className="grid gap-1.5">
+              {IMAGE_MODEL_OPTIONS.map((opt) => {
+                const active = imageModel === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setImageModel(opt.id)}
+                    className={`rounded-xl border-2 px-3 py-2 text-left transition ${
+                      active
+                        ? "border-black bg-black text-white shadow"
+                        : "border-black/10 bg-white hover:border-black/30"
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">{opt.label}</span>
+                    <span
+                      className={`mt-0.5 block font-mono text-[10px] ${
+                        active ? "text-white/75" : "text-black/55"
+                      }`}
+                    >
+                      {opt.id}
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-[10px] ${
+                        active ? "text-white/70" : "text-black/45"
+                      }`}
+                    >
+                      {opt.blurb}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-black/55">
+              Used for Photo → Gemini and parts remix. Failures show the real
+              API error for the selected model (no silent substitute).
+            </p>
           </div>
 
           {mode === "photo" ? (
@@ -613,7 +698,7 @@ export function CardStudio() {
                         key={opt.id}
                         type="button"
                         onClick={() =>
-                          applyPartsSelection({ ...parts, [cat.id]: opt.id })
+                          applyPartsSelection({ [cat.id]: opt.id })
                         }
                         className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
                           parts[cat.id] === opt.id
@@ -628,7 +713,8 @@ export function CardStudio() {
                 </div>
               ))}
               <p className="text-[11px] text-black/60">
-                Chips update the art frame immediately (baked art + overlays).
+                Look / Outfit / Accessory / Backdrop update the art frame
+                immediately (baked portraits + tint / wash / accessory overlays).
                 Optional: ask Flash to remix pixels when image quota is available.
               </p>
               <button
@@ -637,7 +723,7 @@ export function CardStudio() {
                 onClick={() => void composeFromParts(true)}
                 className="w-full rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
               >
-                Remix with Gemini Flash
+                Remix with selected image model
               </button>
             </div>
           )}
