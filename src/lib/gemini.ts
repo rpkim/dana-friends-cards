@@ -4,6 +4,10 @@ import {
   DEFAULT_IMAGE_MODEL_ID,
   parseRequestedImageModel,
 } from "@/lib/imageModels";
+import {
+  PHOTO_STYLIZE_INSTRUCTION,
+  photoStylizeUserSuffix,
+} from "@/lib/photoStylizePrompt";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
 
 export function getGeminiApiKey(): string | undefined {
@@ -53,13 +57,11 @@ export function resolveRequestImageModel(
   return { ok: true, id: DEFAULT_IMAGE_MODEL_ID };
 }
 
-const STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
-Write ONE dense image-generation prompt for polished anime/chibi TCG portrait art.
-Match the visual BAR of premium custom cards like the LOHA snack/night examples and Dana & Friends samples:
-big shiny eyes, soft cel shading, cute proportions, painted environment backgrounds, clean linework.
-Square composition for a trading-card art window, character centered chest-up (or scene that fits the type).
-CRITICAL framing: keep the FULL face visible with margin below the chin — never crop through nose/mouth; leave a little space under the chin and include upper chest. Tall hoods/ears may extend upward but the face must sit fully inside the frame.
-ORIGINAL designs only — no Poké Balls, no Nintendo/Pokémon names or trademarks.
+/** Parts-mixer only — never used for photo stylize (photo uses PHOTO_STYLIZE_INSTRUCTION). */
+const PARTS_STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
+Write ONE dense image-generation prompt for polished anime/chibi TCG portrait art from parts.
+Match LOHA/Dana-friends example polish: soft cel shading, cute proportions, painted backgrounds, clean linework.
+Keep the FULL face visible with margin under the chin. ORIGINAL designs only — no Nintendo trademarks.
 Return ONLY the prompt text.`;
 
 export async function buildChibiPrompt(input: {
@@ -69,17 +71,28 @@ export async function buildChibiPrompt(input: {
   partsSummary?: string;
   extra?: string;
 }): Promise<string> {
+  // Photo mode never invents a prompt that can replace the person — see generateChibiImage.
+  if (input.mode === "photo") {
+    return [
+      PHOTO_STYLIZE_INSTRUCTION,
+      photoStylizeUserSuffix({
+        theme: input.theme,
+        typeLabel: input.typeLabel,
+      }),
+    ].join("\n\n");
+  }
+
   const google = getGeminiClient();
-  const fallback = defaultPrompt(input);
+  const fallback = defaultPartsPrompt(input);
   if (!google) return fallback;
 
   const promptText = [
     `Chrome/style palette hint: ${input.theme}`,
     input.typeLabel ? `Card type label: ${input.typeLabel}` : "",
-    `Mode: ${input.mode}`,
+    `Mode: parts`,
     input.partsSummary ? `Parts: ${input.partsSummary}` : "",
     input.extra || "",
-    "Match LOHA/Dana-friends example polish (art quality), invent original character/outfit.",
+    "Match LOHA/Dana-friends example polish (art quality). Invent an original character from the parts — no trademarks.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -88,7 +101,7 @@ export async function buildChibiPrompt(input: {
     try {
       const result = await generateText({
         model: google(modelId),
-        system: STYLE_SYSTEM,
+        system: PARTS_STYLE_SYSTEM,
         prompt: promptText,
       });
       const text = result.text?.trim();
@@ -100,9 +113,8 @@ export async function buildChibiPrompt(input: {
   return fallback;
 }
 
-function defaultPrompt(input: {
+function defaultPartsPrompt(input: {
   theme: string;
-  mode: "photo" | "parts";
   typeLabel?: string;
   partsSummary?: string;
   extra?: string;
@@ -112,7 +124,7 @@ Palette/mood: ${input.theme}. Type: ${input.typeLabel || "custom"}.
 Big shiny eyes, soft cel shading, cute proportions, painted background.
 ${input.partsSummary || ""}
 ${input.extra || ""}
-Original designs only — no Poké Balls, no Nintendo trademarks. Square TCG art frame. Keep the entire face visible with margin under the chin — do not crop mid-face.`;
+Original designs only — no Poké Balls, no Nintendo trademarks. Keep the entire face visible with margin under the chin.`;
 }
 
 export type GeminiImageResult =
@@ -243,44 +255,66 @@ export async function generateChibiImage(opts: {
   }
   const model = resolved.id;
 
-  const prompt = await buildChibiPrompt({
-    theme: opts.theme,
-    mode: opts.mode,
-    typeLabel: opts.typeLabel,
-    partsSummary: opts.partsSummary,
-    extra: opts.extra,
-  });
+  const isPhoto = opts.mode === "photo" && !!opts.sourceImage;
+
+  // Photo path: fixed identity-first instruction + attached photo (never text-only).
+  // Parts path: still builds a compose prompt (may invent character from parts).
+  const prompt = isPhoto
+    ? [
+        PHOTO_STYLIZE_INSTRUCTION,
+        photoStylizeUserSuffix({
+          theme: opts.theme,
+          typeLabel: opts.typeLabel,
+        }),
+      ].join("\n\n")
+    : await buildChibiPrompt({
+        theme: opts.theme,
+        mode: opts.mode,
+        typeLabel: opts.typeLabel,
+        partsSummary: opts.partsSummary,
+        extra: opts.extra,
+      });
+
+  // Log exact prompt used (never log API keys or image bytes).
+  console.info("[gemini] image model:", model);
+  console.info("[gemini] mode:", opts.mode);
+  console.info("[gemini] prompt:\n" + prompt);
 
   const content: Array<
     | { type: "text"; text: string }
     | { type: "image"; image: string; mediaType?: string }
-  > = [{ type: "text", text: prompt }];
+  > = [];
 
-  if (opts.referenceImage) {
+  if (isPhoto && opts.sourceImage) {
+    // Photo FIRST as image input — identity source of truth.
     content.push({
       type: "text",
-      text: "Match the ART POLISH and chibi quality of this example card illustration (style/quality only — invent original characters; no trademarks):",
-    });
-    content.push({
-      type: "image",
-      image: `data:${opts.referenceImage.mediaType};base64,${opts.referenceImage.base64}`,
-    });
-  }
-
-  if (opts.sourceImage) {
-    content.push({
-      type: "text",
-      text: "Stylize THIS photo into the same polished anime/chibi card-art look while keeping likeness:",
+      text: "Attached photo of the person to stylize (identity source — keep this same person):",
     });
     content.push({
       type: "image",
       image: `data:${opts.sourceImage.mediaType};base64,${opts.sourceImage.base64}`,
     });
+    content.push({ type: "text", text: prompt });
+  } else {
+    content.push({ type: "text", text: prompt });
+    if (opts.referenceImage) {
+      content.push({
+        type: "text",
+        text: "Match the ART POLISH and chibi quality of this example (style/quality only — invent original characters; no trademarks):",
+      });
+      content.push({
+        type: "image",
+        image: `data:${opts.referenceImage.mediaType};base64,${opts.referenceImage.base64}`,
+      });
+    }
   }
 
   try {
     const result = await generateText({
       model: google(model),
+      // Identity instruction as system when photo-stylizing.
+      ...(isPhoto ? { system: PHOTO_STYLIZE_INSTRUCTION } : {}),
       providerOptions: {
         google: {
           responseModalities: ["TEXT", "IMAGE"],

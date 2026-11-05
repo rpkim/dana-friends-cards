@@ -1,7 +1,5 @@
 import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
 import { NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
 
 export const maxDuration = 60;
 
@@ -19,7 +17,6 @@ export async function POST(req: Request) {
     const file = form.get("image");
     const palette = String(form.get("palette") || form.get("theme") || "electric");
     const typeLabel = String(form.get("typeLabel") || "Custom Type");
-    const exampleRef = String(form.get("exampleRef") || "");
     const imageModel = String(
       form.get("imageModel") || form.get("GEMINI_IMAGE_MODEL") || "",
     );
@@ -31,19 +28,17 @@ export async function POST(req: Request) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = file.type || "image/jpeg";
 
-    const referenceImage = await loadReference(exampleRef, palette);
-
+    // Photo is the only image input. Example-card refs are NOT passed — they
+    // previously pulled identity toward Dana/LOHA characters. Theme/type are a
+    // short suffix only inside PHOTO_STYLIZE_INSTRUCTION handling.
     const result = await generateChibiImage({
       theme: palette,
       mode: "photo",
       typeLabel,
-      extra:
-        "Keep the person recognizable as a cute anime chibi; chest-up TCG portrait at LOHA/Dana-friends example polish.",
       sourceImage: {
         base64: bytes.toString("base64"),
         mediaType,
       },
-      referenceImage,
       imageModel: imageModel || undefined,
     });
 
@@ -62,37 +57,11 @@ export async function POST(req: Request) {
       provider: "google-gemini",
       model: result.model,
       styleModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      // Echo prompt text only (no keys / no image bytes) for debugging likeness.
+      prompt: result.prompt,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Stylize failed";
     return NextResponse.json({ fallback: true, reason: message });
   }
-}
-
-async function loadReference(
-  exampleRef: string,
-  palette: string,
-): Promise<{ base64: string; mediaType: string } | undefined> {
-  const candidates = [
-    exampleRef,
-    `/examples/${palette === "autumn" ? "loha-snack" : palette === "aura" ? "loha-night" : "dana"}.webp`,
-    `/art/${palette === "electric" ? "dana" : palette === "autumn" ? "thea" : palette === "aura" ? "ritsuki" : "josephine"}.jpg`,
-  ].filter(Boolean);
-
-  for (const ref of candidates) {
-    try {
-      const cleaned = ref.replace(/^\//, "");
-      if (cleaned.includes("..")) continue;
-      const buf = await readFile(path.join(process.cwd(), "public", cleaned));
-      const mediaType = cleaned.endsWith(".webp")
-        ? "image/webp"
-        : cleaned.endsWith(".png")
-          ? "image/png"
-          : "image/jpeg";
-      return { base64: buf.toString("base64"), mediaType };
-    } catch {
-      /* try next */
-    }
-  }
-  return undefined;
 }
