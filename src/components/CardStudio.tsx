@@ -19,7 +19,12 @@ import {
   DEFAULT_CAPTION,
   isCaptionPreset,
 } from "@/lib/captions";
-import { downloadDataUrl, nodeToPng, printNode } from "@/lib/exportCard";
+import {
+  downloadDataUrl,
+  nodeToPng,
+  printDataUrl,
+  printNode,
+} from "@/lib/exportCard";
 import {
   DEFAULT_PARTS,
   PART_CATEGORIES,
@@ -75,6 +80,8 @@ export function CardStudio() {
   const [showPrint, setShowPrint] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
+  /** Gemini A4 sheet (front+back). Never cropped into the art frame. */
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   /** Select value: a preset label, or CAPTION_AI_VALUE while AI is chosen. */
   const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
 
@@ -230,11 +237,12 @@ export function CardStudio() {
     setStatus(stylizeLoading());
     photoBlobRef.current = blob;
 
-    // Immediate preview on the card while Gemini runs
+    // Photo preview only on the card art frame — sheet result is separate.
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     const preview = URL.createObjectURL(blob);
     previewUrlRef.current = preview;
     setArtUrl(preview);
+    setArtPlan(null);
 
     try {
       const form = new FormData();
@@ -243,9 +251,18 @@ export function CardStudio() {
       form.append("typeLabel", draft.typeLabel);
       form.append("exampleRef", exampleRef);
       form.append("imageModel", imageModel);
+      form.append("name", draft.name);
+      form.append("hp", String(draft.hp));
+      form.append("attack1Name", draft.attack1Name);
+      form.append("attack1Damage", String(draft.attack1Damage));
+      form.append("attack1Text", draft.attack1Text);
+      form.append("attack2Name", draft.attack2Name);
+      form.append("attack2Damage", String(draft.attack2Damage));
+      form.append("attack2Text", draft.attack2Text);
       const res = await fetch("/api/stylize", { method: "POST", body: form });
       let json: {
         image?: string;
+        kind?: string;
         reason?: string;
         billing?: boolean;
         httpStatus?: number;
@@ -253,6 +270,7 @@ export function CardStudio() {
         model?: string;
         message?: string;
         error?: string;
+        prompt?: string;
       } = {};
       try {
         json = (await res.json()) as typeof json;
@@ -261,11 +279,11 @@ export function CardStudio() {
       }
       const reason = json.reason || json.message || json.error || null;
       if (json.image) {
-        setArtUrl(json.image);
-        setArtPlan(null);
-        if (previewUrlRef.current) {
-          URL.revokeObjectURL(previewUrlRef.current);
-          previewUrlRef.current = null;
+        // Full A4 sheet — show/download as print sheet, never crop into art box.
+        setSheetUrl(json.image);
+        setShowPrint(true);
+        if (json.prompt) {
+          console.info("[stylize] prompt:\n" + json.prompt);
         }
         setStatus(stylizeSuccess(json.model));
       } else {
@@ -461,10 +479,22 @@ export function CardStudio() {
 
   async function downloadSheet() {
     setShowPrint(true);
-    await new Promise((r) => setTimeout(r, 100));
-    if (!printRef.current) return;
     setBusy(true);
     try {
+      if (sheetUrl) {
+        downloadDataUrl(
+          sheetUrl,
+          `${(draft.name || "friend").toLowerCase()}-print-sheet.png`,
+        );
+        setStatus({
+          kind: "success",
+          en: "Gemini A4 print sheet downloaded.",
+          ko: "Gemini A4 인쇄 시트를 다운로드했습니다.",
+        });
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+      if (!printRef.current) return;
       await document.fonts.ready.catch(() => undefined);
       const url = await nodeToPng(printRef.current);
       downloadDataUrl(
@@ -489,10 +519,14 @@ export function CardStudio() {
 
   async function handlePrint() {
     setShowPrint(true);
-    await new Promise((r) => setTimeout(r, 100));
-    if (!printRef.current) return;
     setBusy(true);
     try {
+      if (sheetUrl) {
+        await printDataUrl(sheetUrl);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+      if (!printRef.current) return;
       await printNode(printRef.current);
     } catch (err) {
       setStatus({
@@ -724,8 +758,9 @@ export function CardStudio() {
           {mode === "photo" ? (
             <div className="space-y-3">
               <p className="text-sm text-black/70">
-                Capture or upload → Gemini Flash stylizes to anime/chibi and
-                applies it to the art frame (download/print use that result).
+                Capture or upload → Gemini generates a full A4 print sheet
+                (front left + back right). The sheet is shown/downloaded as-is —
+                not cropped into the art frame.
               </p>
               <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
                 {cameraOn ? (
@@ -896,7 +931,9 @@ export function CardStudio() {
       {showPrint && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-2xl font-bold">Print sheet</h2>
+            <h2 className="font-display text-2xl font-bold">
+              {sheetUrl ? "Gemini A4 print sheet" : "Print sheet"}
+            </h2>
             <button
               type="button"
               className="text-sm font-bold underline"
@@ -905,7 +942,16 @@ export function CardStudio() {
               Hide
             </button>
           </div>
-          <PrintSheet data={data} />
+          {sheetUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={sheetUrl}
+              alt="Gemini A4 print sheet — front and back"
+              className="w-full rounded-2xl border border-black/10 bg-white shadow"
+            />
+          ) : (
+            <PrintSheet data={data} />
+          )}
         </div>
       )}
     </div>

@@ -5,8 +5,8 @@ import {
   parseRequestedImageModel,
 } from "@/lib/imageModels";
 import {
-  PHOTO_STYLIZE_INSTRUCTION,
-  photoStylizeUserSuffix,
+  buildPhotoPrintSheetPrompt,
+  type PhotoPrintSheetFields,
 } from "@/lib/photoStylizePrompt";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
 
@@ -70,16 +70,11 @@ export async function buildChibiPrompt(input: {
   typeLabel?: string;
   partsSummary?: string;
   extra?: string;
+  cardFields?: PhotoPrintSheetFields;
 }): Promise<string> {
-  // Photo mode never invents a prompt that can replace the person — see generateChibiImage.
+  // Photo mode: full A4 print-sheet prompt (see generateChibiImage).
   if (input.mode === "photo") {
-    return [
-      PHOTO_STYLIZE_INSTRUCTION,
-      photoStylizeUserSuffix({
-        theme: input.theme,
-        typeLabel: input.typeLabel,
-      }),
-    ].join("\n\n");
+    return buildPhotoPrintSheetPrompt(input.cardFields);
   }
 
   const google = getGeminiClient();
@@ -238,6 +233,8 @@ export async function generateChibiImage(opts: {
   referenceImage?: { base64: string; mediaType: string };
   /** Per-request image model override from the UI picker. */
   imageModel?: string | null;
+  /** Name / HP / attacks — only these strings may replace defaults in the A4 prompt. */
+  cardFields?: PhotoPrintSheetFields;
 }): Promise<GeminiImageResult> {
   const google = getGeminiClient();
   if (!google) {
@@ -257,16 +254,10 @@ export async function generateChibiImage(opts: {
 
   const isPhoto = opts.mode === "photo" && !!opts.sourceImage;
 
-  // Photo path: fixed identity-first instruction + attached photo (never text-only).
+  // Photo path: verbatim A4 print-sheet prompt + attached photo (never text-only).
   // Parts path: still builds a compose prompt (may invent character from parts).
   const prompt = isPhoto
-    ? [
-        PHOTO_STYLIZE_INSTRUCTION,
-        photoStylizeUserSuffix({
-          theme: opts.theme,
-          typeLabel: opts.typeLabel,
-        }),
-      ].join("\n\n")
+    ? buildPhotoPrintSheetPrompt(opts.cardFields)
     : await buildChibiPrompt({
         theme: opts.theme,
         mode: opts.mode,
@@ -286,10 +277,10 @@ export async function generateChibiImage(opts: {
   > = [];
 
   if (isPhoto && opts.sourceImage) {
-    // Photo FIRST as image input — identity source of truth.
+    // Photo FIRST as image input — identity source of truth for the A4 sheet.
     content.push({
       type: "text",
-      text: "Attached photo of the person to stylize (identity source — keep this same person):",
+      text: "Attached photo of the person to stylize (identity source — keep this same person on the front card):",
     });
     content.push({
       type: "image",
@@ -313,8 +304,7 @@ export async function generateChibiImage(opts: {
   try {
     const result = await generateText({
       model: google(model),
-      // Identity instruction as system when photo-stylizing.
-      ...(isPhoto ? { system: PHOTO_STYLIZE_INSTRUCTION } : {}),
+      // Do not mirror the long A4 prompt as system — send it once with the photo.
       providerOptions: {
         google: {
           responseModalities: ["TEXT", "IMAGE"],

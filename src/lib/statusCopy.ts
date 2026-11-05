@@ -56,8 +56,8 @@ export function rateLimitStatus(detail?: string): StatusMsg {
 export function stylizeLoading(): StatusMsg {
   return {
     kind: "loading",
-    en: "Sending photo to Gemini for anime/chibi stylization…",
-    ko: "사진을 Gemini로 보내 애니메/치비 스타일 변환 중…",
+    en: "Sending photo to Gemini for a full A4 print sheet (front + back)…",
+    ko: "사진으로 A4 인쇄 시트(앞면+뒷면) 생성 중…",
   };
 }
 
@@ -72,8 +72,8 @@ export function composeLoading(): StatusMsg {
 export function stylizeSuccess(model?: string): StatusMsg {
   return {
     kind: "success",
-    en: `Photo stylized and applied to the card${model ? ` (${model})` : ""}.`,
-    ko: `사진이 변환되어 카드 아트에 적용되었습니다${model ? ` (${model})` : ""}.`,
+    en: `A4 print sheet ready — front + back side by side${model ? ` (${model})` : ""}.`,
+    ko: `A4 인쇄 시트 준비됨 — 앞면+뒷면${model ? ` (${model})` : ""}.`,
   };
 }
 
