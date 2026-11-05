@@ -628,6 +628,87 @@ export function CardStudio() {
             <CardFront data={data} />
           </div>
 
+          <div
+            className="mx-auto w-full max-w-[400px] space-y-3 rounded-2xl border-2 border-black bg-[#FFF8D6] p-3 shadow-sm"
+            data-section="attacks"
+          >
+            <div className="space-y-0.5">
+              <p className="text-base font-bold tracking-tight">Attacks</p>
+              <p className="text-[11px] font-medium text-black/55">
+                Pick Attack 1 and Attack 2 — both update the card skill box
+                above.
+              </p>
+            </div>
+            {(
+              [
+                {
+                  id: "attack1" as const,
+                  label: "Attack 1",
+                  name: draft.attack1Name,
+                  apply: (atk: (typeof ATTACK_OPTIONS)[number]) =>
+                    patchDraft({
+                      attack1Name: atk.name,
+                      attack1Damage: atk.damage,
+                      attack1Text: atk.description,
+                    }),
+                },
+                {
+                  id: "attack2" as const,
+                  label: "Attack 2",
+                  name: draft.attack2Name,
+                  apply: (atk: (typeof ATTACK_OPTIONS)[number]) =>
+                    patchDraft({
+                      attack2Name: atk.name,
+                      attack2Damage: atk.damage,
+                      attack2Text: atk.description,
+                    }),
+                },
+              ] as const
+            ).map((slot) => (
+              <div key={slot.id} className="space-y-2" data-field={slot.id}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+                    {slot.label}
+                  </p>
+                  <p className="truncate text-[11px] font-semibold text-black/55">
+                    {slot.name}
+                    {slot.id === "attack1"
+                      ? ` · ${draft.attack1Damage}`
+                      : ` · ${draft.attack2Damage}`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ATTACK_OPTIONS.map((opt) => {
+                    const active = slot.name === opt.name;
+                    return (
+                      <button
+                        key={`${slot.id}-${opt.id}`}
+                        type="button"
+                        onClick={() => slot.apply(opt)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold ${
+                          active
+                            ? "border-black bg-black text-white"
+                            : "border-black/15 bg-white"
+                        }`}
+                        aria-pressed={active}
+                        title={opt.description}
+                      >
+                        <span className="block leading-tight">{opt.name}</span>
+                        <span
+                          className={`block text-[10px] font-semibold ${
+                            active ? "text-white/70" : "text-black/45"
+                          }`}
+                        >
+                          {opt.damage} dmg
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="mx-auto w-full max-w-[400px] space-y-3">
             <div className="flex items-center justify-center gap-2">
               <button
@@ -804,86 +885,6 @@ export function CardStudio() {
               />
             </label>
           </div>
-          <div
-            className="space-y-3 rounded-2xl border-2 border-black/15 bg-[#FFF8D6] p-3"
-            data-section="attacks"
-          >
-            <div className="space-y-0.5">
-              <p className="text-sm font-bold tracking-tight">Attacks</p>
-              <p className="text-[11px] font-medium text-black/55">
-                Pick Attack 1 and Attack 2 — both update the card skill box.
-              </p>
-            </div>
-            {(
-              [
-                {
-                  id: "attack1" as const,
-                  label: "Attack 1",
-                  name: draft.attack1Name,
-                  apply: (atk: (typeof ATTACK_OPTIONS)[number]) =>
-                    patchDraft({
-                      attack1Name: atk.name,
-                      attack1Damage: atk.damage,
-                      attack1Text: atk.description,
-                    }),
-                },
-                {
-                  id: "attack2" as const,
-                  label: "Attack 2",
-                  name: draft.attack2Name,
-                  apply: (atk: (typeof ATTACK_OPTIONS)[number]) =>
-                    patchDraft({
-                      attack2Name: atk.name,
-                      attack2Damage: atk.damage,
-                      attack2Text: atk.description,
-                    }),
-                },
-              ] as const
-            ).map((slot) => (
-              <div key={slot.id} className="space-y-2" data-field={slot.id}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
-                    {slot.label}
-                  </p>
-                  <p className="truncate text-[11px] font-semibold text-black/55">
-                    {slot.name}
-                    {slot.id === "attack1"
-                      ? ` · ${draft.attack1Damage}`
-                      : ` · ${draft.attack2Damage}`}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ATTACK_OPTIONS.map((opt) => {
-                    const active = slot.name === opt.name;
-                    return (
-                      <button
-                        key={`${slot.id}-${opt.id}`}
-                        type="button"
-                        onClick={() => slot.apply(opt)}
-                        className={`rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold ${
-                          active
-                            ? "border-black bg-black text-white"
-                            : "border-black/15 bg-white"
-                        }`}
-                        aria-pressed={active}
-                        title={opt.description}
-                      >
-                        <span className="block leading-tight">{opt.name}</span>
-                        <span
-                          className={`block text-[10px] font-semibold ${
-                            active ? "text-white/70" : "text-black/45"
-                          }`}
-                        >
-                          {opt.damage} dmg
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
           <label className="block space-y-1 text-sm font-semibold">
             Caption under art
             <select
