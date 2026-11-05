@@ -167,23 +167,26 @@ export function CardStudio() {
         );
       } else {
         setArtUrl(fallbackArtFor(themeId, nextParts));
+        const next = friendlyStatus({
+          reason,
+          billing: json.billing,
+          httpStatus: res.status,
+          context: "compose",
+        });
+        // Silent auto-remix: keep Ready unless it's a credit/billing issue.
+        const isBilling = /credits are empty|402|top up/i.test(next);
         setStatus(
-          friendlyStatus({
-            reason,
-            billing: json.billing,
-            httpStatus: res.status,
-            context: "compose",
-          }),
+          silentFallback && !isBilling ? READY_STATUS : next,
         );
       }
     } catch (err) {
       setArtUrl(fallbackArtFor(themeId, nextParts));
-      setStatus(
-        friendlyStatus({
-          reason: err instanceof Error ? err.message : null,
-          context: "compose",
-        }),
-      );
+      const next = friendlyStatus({
+        reason: err instanceof Error ? err.message : null,
+        context: "compose",
+      });
+      const isBilling = /credits are empty|402|top up/i.test(next);
+      setStatus(silentFallback && !isBilling ? READY_STATUS : next);
     } finally {
       setBusy(false);
     }
