@@ -3,116 +3,96 @@
 import { CardBack } from "@/components/CardBack";
 import { CardFront, type CardData } from "@/components/CardFront";
 
+export type PrintPairKind = "dana" | "name";
+
 type Props = {
   data: CardData;
-  /** Stylized portrait / generated back art shared by both backs when available. */
-  backArtUrl?: string | null;
-  /** Optional separate art for the name back. */
-  nameBackArtUrl?: string | null;
-  /** Card name for "{name} & Friends" back. */
+  /**
+   * Stylized user portrait — on the front art frame and composited into the back.
+   * Same face on Dana & Friends and {name} & Friends pairs.
+   */
+  faceUrl?: string | null;
+  /**
+   * Optional full Gemini scene for the name-back only (must already show the user).
+   * Never a title-only stock swap.
+   */
+  nameBackSceneUrl?: string | null;
+  /** Card name for the name pair. */
   cardName?: string;
+  /** Which 2-up pair to render. */
+  pair?: PrintPairKind;
 };
 
 /**
- * Print sheet: front + Dana & Friends back + Name & Friends back.
- * Pure white page; dashed fold line only (no scissors / no CUT OR FOLD text).
+ * One 2-up print pair: front | back, pure white page, dashed fold line only.
  */
 export function PrintSheet({
   data,
-  backArtUrl,
-  nameBackArtUrl,
+  faceUrl,
+  nameBackSceneUrl,
   cardName,
+  pair = "dana",
 }: Props) {
   const name = (cardName || data.customName || "FRIEND").trim() || "FRIEND";
-  const nameTitle = `${name} & Friends`;
-  const nameFooter = `${name.toUpperCase()}'S SPECIAL CARD • 2026`;
-  const danaArt = backArtUrl || null;
-  const nameArt = nameBackArtUrl || backArtUrl || null;
+  const isDana = pair === "dana";
+  const backTitle = isDana ? "Dana & Friends" : `${name} & Friends`;
+  const backFooter = isDana
+    ? "Dana’s Special Card • 2026"
+    : `${name.toUpperCase()}'S SPECIAL CARD • 2026`;
+  const pairLabel = isDana ? "Dana & Friends pair" : `${name} & Friends pair`;
 
   return (
     <div
-      className="print-sheet relative mx-auto w-full max-w-[1200px] bg-white p-8"
-      style={{ backgroundColor: "#FFFFFF" }}
+      className="print-sheet relative mx-auto w-full max-w-[1100px] p-8"
+      style={{ backgroundColor: "#FFFFFF", backgroundImage: "none" }}
+      data-pair={pair}
+      data-page-bg="#FFFFFF"
     >
       <CropMarks />
-      <div className="relative grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-6">
-        <div className="relative mx-auto w-full max-w-[320px]">
+      <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-black/45">
+        {pairLabel}
+      </p>
+      <div
+        className="relative grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-12"
+        style={{ backgroundColor: "#FFFFFF" }}
+      >
+        <div
+          className="relative mx-auto w-full max-w-[360px]"
+          style={{ backgroundColor: "#FFFFFF" }}
+        >
           <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/45">
             Front
           </p>
           <CardFront data={data} />
         </div>
-        <div className="relative mx-auto w-full max-w-[320px]">
+        <div
+          className="relative mx-auto w-full max-w-[360px]"
+          style={{ backgroundColor: "#FFFFFF" }}
+        >
           <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/45">
-            Dana &amp; Friends
+            Back — {backTitle}
           </p>
-          <CardBack
-            theme={data.theme}
-            title="Dana & Friends"
-            footer="Dana’s Special Card • 2026"
-            artUrl={danaArt}
-          />
-        </div>
-        <div className="relative mx-auto w-full max-w-[320px]">
-          <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/45">
-            {nameTitle}
-          </p>
-          <CardBack
-            theme={data.theme}
-            title={nameTitle}
-            footer={nameFooter}
-            artUrl={nameArt}
-          />
-        </div>
-      </div>
-      {/* Dashed fold guides between columns (desktop) — no text, no scissors */}
-      <div
-        className="pointer-events-none absolute inset-y-12 left-[33.333%] hidden w-0 -translate-x-1/2 border-l-2 border-dashed border-black/55 md:block"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-y-12 left-[66.666%] hidden w-0 -translate-x-1/2 border-l-2 border-dashed border-black/55 md:block"
-        aria-hidden
-      />
-    </div>
-  );
-}
-
-/** Classic 2-up front + one back (used when a Gemini 2-card sheet is primary). */
-export function PrintSheetTwoUp({
-  data,
-  backArtUrl,
-  backTitle = "Dana & Friends",
-  backFooter = "Dana’s Special Card • 2026",
-}: {
-  data: CardData;
-  backArtUrl?: string | null;
-  backTitle?: string;
-  backFooter?: string;
-}) {
-  return (
-    <div
-      className="print-sheet relative mx-auto w-full max-w-[1100px] bg-white p-8"
-      style={{ backgroundColor: "#FFFFFF" }}
-    >
-      <CropMarks />
-      <div className="relative grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-12">
-        <div className="relative mx-auto w-full max-w-[360px]">
-          <CardFront data={data} />
-        </div>
-        <div className="relative mx-auto w-full max-w-[360px]">
           <CardBack
             theme={data.theme}
             title={backTitle}
             footer={backFooter}
-            artUrl={backArtUrl}
+            faceUrl={faceUrl}
+            sceneUrl={
+              !isDana && nameBackSceneUrl && faceUrl
+                ? nameBackSceneUrl
+                : null
+            }
           />
         </div>
       </div>
+      {/* Dashed fold line only — white gap, no scissors, no CUT OR FOLD text */}
       <div
-        className="pointer-events-none absolute inset-y-10 left-1/2 hidden w-0 -translate-x-1/2 border-l-2 border-dashed border-black/55 md:block"
+        className="pointer-events-none absolute inset-y-14 left-1/2 hidden w-4 -translate-x-1/2 md:block"
+        style={{ backgroundColor: "#FFFFFF" }}
         aria-hidden
-      />
+      >
+        <div className="mx-auto h-full w-0 border-l-2 border-dashed border-black/55" />
+      </div>
     </div>
   );
 }

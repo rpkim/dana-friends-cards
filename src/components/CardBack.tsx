@@ -10,12 +10,20 @@ type Props = {
   title?: string;
   /** Footer line under the tagline. */
   footer?: string;
-  /** Optional center art override (stylized portrait / generated back). */
-  artUrl?: string | null;
+  /**
+   * Stylized portrait of the user — composited into BOTH backs when set.
+   * Never leave stock Dana alone if this is present.
+   */
+  faceUrl?: string | null;
+  /**
+   * Full generated back scene of the same person (optional).
+   * If set, used as the entire center art. Must already include the user face.
+   */
+  sceneUrl?: string | null;
 };
 
-/** Painted kid + original friends — fills the back art plane per palette. */
-const BACK_ART: Record<PaletteId, string> = {
+/** Theme friends scene — backdrop only when compositing a face. */
+const BACK_SCENE: Record<PaletteId, string> = {
   electric: "/art/backs/friends-electric.jpg",
   autumn: "/art/backs/friends-autumn.jpg",
   aura: "/art/backs/friends-aura.jpg",
@@ -23,15 +31,17 @@ const BACK_ART: Record<PaletteId, string> = {
 };
 
 /**
- * Dense play back (not invitation/QR).
- * Title → full-bleed illustration → slogan → tagline → footer.
+ * Dense play back. When `faceUrl` is set, composites that stylized person
+ * into the theme scene so Dana & Friends and {Name} & Friends share one face
+ * (title/footer are the only differences).
  */
 export function CardBack({
   theme,
   className,
   title = "Dana & Friends",
   footer = "Dana’s Special Card • 2026",
-  artUrl,
+  faceUrl,
+  sceneUrl,
 }: Props) {
   const ink = theme.id === "aura" ? "#EAF0FF" : theme.text;
   const field = theme.id === "aura" ? theme.panel : "#FFF8E8";
@@ -45,7 +55,8 @@ export function CardBack({
           : "card-back-title--sparkle";
   const sloganColor = theme.id === "aura" ? "#FFE56A" : theme.accentDeep;
   const footerColor = theme.id === "aura" ? "#A8C4FF" : theme.accentDeep;
-  const centerArt = artUrl || BACK_ART[theme.id];
+  const scene = sceneUrl || BACK_SCENE[theme.id];
+  const hasFace = !!faceUrl;
 
   return (
     <article
@@ -55,6 +66,7 @@ export function CardBack({
         background: `linear-gradient(180deg, ${theme.accentSoft} 0%, ${theme.accent} 55%, ${theme.accentDeep} 140%)`,
       }}
       data-card-side="back"
+      data-has-face={hasFace ? "1" : "0"}
     >
       <div
         className="absolute inset-[7px] bottom-[11px] grid grid-rows-[auto_minmax(0,1fr)_auto_auto_auto] gap-[2px] rounded-[11px] border-[2.5px] px-1.5 pb-1 pt-1.5 sm:inset-[10px] sm:bottom-[14px] sm:gap-[3px] sm:rounded-[14px] sm:border-[3px] sm:px-2 sm:pb-1.5 sm:pt-2"
@@ -87,13 +99,51 @@ export function CardBack({
           className="relative z-10 min-h-0 w-full overflow-hidden rounded-[8px] border-[2px] sm:rounded-[12px] sm:border-[2.5px]"
           style={{ borderColor: theme.accentDeep, background: theme.accentSoft }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={centerArt}
-            alt={`${title} card back art`}
-            className="absolute inset-0 h-full w-full object-cover object-[center_26%]"
-            draggable={false}
-          />
+          {sceneUrl && !faceUrl ? (
+            // Full generated scene of the person (Gemini name/dana back).
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={sceneUrl}
+              alt={`${title} card back art`}
+              className="absolute inset-0 h-full w-full object-cover object-[center_26%]"
+              draggable={false}
+            />
+          ) : (
+            <>
+              {/* Theme friends backdrop */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={scene}
+                alt=""
+                aria-hidden
+                className={`absolute inset-0 h-full w-full object-cover object-[center_30%] ${
+                  hasFace ? "scale-110 opacity-55 blur-[1px]" : ""
+                }`}
+                draggable={false}
+              />
+              {hasFace ? (
+                <>
+                  {/* Soft theme wash so outfit reads as selected palette */}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: `radial-gradient(ellipse at 50% 40%, ${theme.accentSoft}cc 0%, transparent 62%), linear-gradient(180deg, transparent 40%, ${theme.accent}55 100%)`,
+                    }}
+                  />
+                  {/* Stylized user portrait — same face on Dana & name backs */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={faceUrl}
+                    alt={`${title} — stylized portrait`}
+                    className="absolute inset-[6%] rounded-[14px] object-cover object-[center_22%] shadow-[0_8px_24px_rgba(0,0,0,.35)] ring-2"
+                    style={{ borderColor: theme.accentDeep }}
+                    draggable={false}
+                    data-back-face="1"
+                  />
+                </>
+              ) : null}
+            </>
+          )}
         </div>
 
         <p

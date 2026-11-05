@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CardBack } from "@/components/CardBack";
 import { CardFront, type CardData } from "@/components/CardFront";
-import { PrintSheet } from "@/components/PrintSheet";
+import { PrintSheet, type PrintPairKind } from "@/components/PrintSheet";
 import { MotifIcon } from "@/components/MotifIcon";
 import { StatusBanner } from "@/components/StatusBanner";
 import {
@@ -88,11 +88,43 @@ export function CardStudio() {
   const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
   /** Which back is emphasized in the small preview. */
   const [backPreview, setBackPreview] = useState<"dana" | "name">("dana");
+  /** Which 2-up print pair is focused (Dana pair vs name pair). */
+  const [printPair, setPrintPair] = useState<PrintPairKind>("dana");
+  /** Studio print view: both sheets stacked, or one pair at a time. */
+  const [printView, setPrintView] = useState<"both" | "switch">("both");
   /** Select value: a preset label, or CAPTION_AI_VALUE while AI is chosen. */
   const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
 
   useEffect(() => {
     setImageModel(readStoredImageModel());
+  }, []);
+
+  // Demo / QA: ?face=/art/demo/jay-blue-portrait.jpg&name=Jay&palette=aura
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    const face = q.get("face");
+    const name = q.get("name");
+    const palette = q.get("palette");
+    const draftPatch: Partial<CardDraft> = {};
+    if (name) draftPatch.name = name;
+    if (
+      palette === "electric" ||
+      palette === "autumn" ||
+      palette === "aura" ||
+      palette === "sparkle"
+    ) {
+      draftPatch.paletteId = palette;
+    }
+    if (Object.keys(draftPatch).length) {
+      setDraft((d) => ({ ...d, ...draftPatch }));
+    }
+    if (face) {
+      setPortraitUrl(face);
+      setArtUrl(face);
+      setArtPlan(null);
+      setShowPrint(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -627,14 +659,15 @@ export function CardStudio() {
                   theme={theme}
                   title="Dana & Friends"
                   footer="Dana’s Special Card • 2026"
-                  artUrl={portraitUrl}
+                  faceUrl={portraitUrl}
                 />
               ) : (
                 <CardBack
                   theme={theme}
                   title={`${(draft.name.trim() || "FRIEND")} & Friends`}
                   footer={`${(draft.name.trim() || "FRIEND").toUpperCase()}'S SPECIAL CARD • 2026`}
-                  artUrl={nameBackUrl || portraitUrl}
+                  faceUrl={portraitUrl}
+                  sceneUrl={nameBackUrl && portraitUrl ? nameBackUrl : null}
                 />
               )}
             </div>
@@ -762,6 +795,12 @@ export function CardStudio() {
                         draft.typeLabel ||
                         `${t.label.split(" ")[0]} Type`,
                     });
+                    // Keep stylized portrait when we have one (palette-matched
+                    // on regenerate). Don't leave a yellow starter on a blue card.
+                    if (!portraitUrl && !photoBlobRef.current) {
+                      setArtUrl(t.starterArt || STARTER_ART);
+                      setArtPlan(null);
+                    }
                   }}
                   className={`inline-flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1.5 text-xs font-bold ${
                     draft.paletteId === t.id
@@ -981,37 +1020,103 @@ export function CardStudio() {
         </aside>
       </div>
 
+      {/* Offscreen capture target: both 2-up pairs for download/print */}
       <div
         ref={printRef}
-        className={
-          showPrint
-            ? "block"
-            : "pointer-events-none absolute -left-[9999px] top-0 w-[1100px]"
-        }
-        aria-hidden={!showPrint}
+        className="pointer-events-none absolute -left-[9999px] top-0 w-[1100px] space-y-8 bg-white"
+        style={{ backgroundColor: "#FFFFFF" }}
+        aria-hidden
       >
         <PrintSheet
           data={data}
           cardName={draft.name}
-          backArtUrl={portraitUrl}
-          nameBackArtUrl={nameBackUrl}
+          faceUrl={portraitUrl}
+          nameBackSceneUrl={nameBackUrl}
+          pair="dana"
+        />
+        <PrintSheet
+          data={data}
+          cardName={draft.name}
+          faceUrl={portraitUrl}
+          nameBackSceneUrl={nameBackUrl}
+          pair="name"
         />
       </div>
 
       {showPrint && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-2xl font-bold">Print sheet</h2>
-            <button
-              type="button"
-              className="text-sm font-bold underline"
-              onClick={() => setShowPrint(false)}
-            >
-              Hide
-            </button>
+        <div
+          className="space-y-4 bg-white p-2"
+          style={{ backgroundColor: "#FFFFFF" }}
+          data-print-studio="1"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-2xl font-bold">Print pairs</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-xl border border-black/10 bg-black/[0.03] p-1">
+                <button
+                  type="button"
+                  onClick={() => setPrintView("both")}
+                  className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                    printView === "both"
+                      ? "bg-black text-white"
+                      : "text-black/55"
+                  }`}
+                >
+                  Both pairs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintView("switch")}
+                  className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                    printView === "switch"
+                      ? "bg-black text-white"
+                      : "text-black/55"
+                  }`}
+                >
+                  One at a time
+                </button>
+              </div>
+              <button
+                type="button"
+                className="text-sm font-bold underline"
+                onClick={() => setShowPrint(false)}
+              >
+                Hide
+              </button>
+            </div>
           </div>
-          {sheetUrl ? (
-            <div className="space-y-2">
+          <p className="text-xs font-medium text-black/55">
+            Two separate 2-up sheets — front | back, #FFFFFF page, dashed fold
+            line only. Same face + palette on both; only the back title changes.
+          </p>
+          {printView === "switch" ? (
+            <div className="inline-flex rounded-xl border border-black/10 bg-black/[0.03] p-1">
+              <button
+                type="button"
+                onClick={() => setPrintPair("dana")}
+                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  printPair === "dana"
+                    ? "bg-black text-white"
+                    : "text-black/55"
+                }`}
+              >
+                Dana &amp; Friends pair
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintPair("name")}
+                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  printPair === "name"
+                    ? "bg-black text-white"
+                    : "text-black/55"
+                }`}
+              >
+                {(draft.name.trim() || "FRIEND") + " & Friends pair"}
+              </button>
+            </div>
+          ) : null}
+          {sheetUrl && printPair === "dana" ? (
+            <div className="space-y-2 bg-white">
               <p className="text-xs font-bold uppercase tracking-wider text-black/50">
                 Gemini A4 — front + Dana &amp; Friends back
               </p>
@@ -1023,30 +1128,36 @@ export function CardStudio() {
               />
             </div>
           ) : null}
-          {nameBackUrl ? (
-            <div className="mx-auto w-full max-w-[360px] space-y-2">
-              <p className="text-center text-xs font-bold uppercase tracking-wider text-black/50">
-                {(draft.name.trim() || "FRIEND") + " & Friends"} back
-              </p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={nameBackUrl}
-                alt={`${draft.name.trim() || "FRIEND"} & Friends card back`}
-                className="w-full rounded-2xl border border-black/10 bg-white shadow"
+          {(printView === "both" || printPair === "dana") && (
+            <div
+              className="space-y-2 bg-white"
+              style={{ backgroundColor: "#FFFFFF" }}
+              data-pair-sheet="dana"
+            >
+              <PrintSheet
+                data={data}
+                cardName={draft.name}
+                faceUrl={portraitUrl}
+                nameBackSceneUrl={nameBackUrl}
+                pair="dana"
               />
             </div>
-          ) : null}
-          <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-black/50">
-              Studio sheet — front + both backs (dashed fold lines, white page)
-            </p>
-            <PrintSheet
-              data={data}
-              cardName={draft.name}
-              backArtUrl={portraitUrl}
-              nameBackArtUrl={nameBackUrl}
-            />
-          </div>
+          )}
+          {(printView === "both" || printPair === "name") && (
+            <div
+              className="space-y-2 bg-white"
+              style={{ backgroundColor: "#FFFFFF" }}
+              data-pair-sheet="name"
+            >
+              <PrintSheet
+                data={data}
+                cardName={draft.name}
+                faceUrl={portraitUrl}
+                nameBackSceneUrl={nameBackUrl}
+                pair="name"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
