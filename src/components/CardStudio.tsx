@@ -667,7 +667,6 @@ export function CardStudio() {
                   title={`${(draft.name.trim() || "FRIEND")} & Friends`}
                   footer={`${(draft.name.trim() || "FRIEND").toUpperCase()}'S SPECIAL CARD • 2026`}
                   faceUrl={portraitUrl}
-                  sceneUrl={nameBackUrl && portraitUrl ? nameBackUrl : null}
                 />
               )}
             </div>
@@ -1031,14 +1030,12 @@ export function CardStudio() {
           data={data}
           cardName={draft.name}
           faceUrl={portraitUrl}
-          nameBackSceneUrl={nameBackUrl}
           pair="dana"
         />
         <PrintSheet
           data={data}
           cardName={draft.name}
           faceUrl={portraitUrl}
-          nameBackSceneUrl={nameBackUrl}
           pair="name"
         />
       </div>
@@ -1138,7 +1135,6 @@ export function CardStudio() {
                 data={data}
                 cardName={draft.name}
                 faceUrl={portraitUrl}
-                nameBackSceneUrl={nameBackUrl}
                 pair="dana"
               />
             </div>
@@ -1153,7 +1149,6 @@ export function CardStudio() {
                 data={data}
                 cardName={draft.name}
                 faceUrl={portraitUrl}
-                nameBackSceneUrl={nameBackUrl}
                 pair="name"
               />
             </div>

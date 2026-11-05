@@ -12,11 +12,6 @@ type Props = {
    * Same face on Dana & Friends and {name} & Friends pairs.
    */
   faceUrl?: string | null;
-  /**
-   * Optional full Gemini scene for the name-back only (must already show the user).
-   * Never a title-only stock swap.
-   */
-  nameBackSceneUrl?: string | null;
   /** Card name for the name pair. */
   cardName?: string;
   /** Which 2-up pair to render. */
@@ -29,7 +24,6 @@ type Props = {
 export function PrintSheet({
   data,
   faceUrl,
-  nameBackSceneUrl,
   cardName,
   pair = "dana",
 }: Props) {
@@ -77,11 +71,6 @@ export function PrintSheet({
             title={backTitle}
             footer={backFooter}
             faceUrl={faceUrl}
-            sceneUrl={
-              !isDana && nameBackSceneUrl && faceUrl
-                ? nameBackSceneUrl
-                : null
-            }
           />
         </div>
       </div>

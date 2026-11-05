@@ -11,18 +11,18 @@ type Props = {
   /** Footer line under the tagline. */
   footer?: string;
   /**
-   * Stylized portrait of the user — composited into BOTH backs when set.
-   * Never leave stock Dana alone if this is present.
+   * Stylized portrait of the user — placed in the center of the dense
+   * friends mascot scene on BOTH backs (title/footer are the only diffs).
    */
   faceUrl?: string | null;
   /**
-   * Full generated back scene of the same person (optional).
-   * If set, used as the entire center art. Must already include the user face.
+   * Full generated back scene (optional). Used only when there is no face
+   * to composite. When `faceUrl` is set, the theme friends scene is always used.
    */
   sceneUrl?: string | null;
 };
 
-/** Theme friends scene — backdrop only when compositing a face. */
+/** Dense Dana & Friends mascot scenes (bunny, fox, donut, clouds) per palette. */
 const BACK_SCENE: Record<PaletteId, string> = {
   electric: "/art/backs/friends-electric.jpg",
   autumn: "/art/backs/friends-autumn.jpg",
@@ -31,9 +31,9 @@ const BACK_SCENE: Record<PaletteId, string> = {
 };
 
 /**
- * Dense play back. When `faceUrl` is set, composites that stylized person
- * into the theme scene so Dana & Friends and {Name} & Friends share one face
- * (title/footer are the only differences).
+ * Dense play back. With `faceUrl`, the stylized face sits in the middle of
+ * the friends scene — mascots stay visible around it. Dana & Friends and
+ * {Name} & Friends share that art; only title/footer change.
  */
 export function CardBack({
   theme,
@@ -55,8 +55,10 @@ export function CardBack({
           : "card-back-title--sparkle";
   const sloganColor = theme.id === "aura" ? "#FFE56A" : theme.accentDeep;
   const footerColor = theme.id === "aura" ? "#A8C4FF" : theme.accentDeep;
-  const scene = sceneUrl || BACK_SCENE[theme.id];
   const hasFace = !!faceUrl;
+  // Face composite always uses the dense theme friends scene — never a
+  // title-only / bust-only swap, and never a different scene per back.
+  const scene = hasFace ? BACK_SCENE[theme.id] : sceneUrl || BACK_SCENE[theme.id];
 
   return (
     <article
@@ -99,51 +101,50 @@ export function CardBack({
           className="relative z-10 min-h-0 w-full overflow-hidden rounded-[8px] border-[2px] sm:rounded-[12px] sm:border-[2.5px]"
           style={{ borderColor: theme.accentDeep, background: theme.accentSoft }}
         >
-          {sceneUrl && !faceUrl ? (
-            // Full generated scene of the person (Gemini name/dana back).
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={sceneUrl}
-              alt={`${title} card back art`}
-              className="absolute inset-0 h-full w-full object-cover object-[center_26%]"
-              draggable={false}
-            />
-          ) : (
+          {/* Dense friends mascot scene — full strength so bunny/fox/donut/clouds read */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={scene}
+            alt={hasFace ? "" : `${title} card back art`}
+            aria-hidden={hasFace ? true : undefined}
+            className="absolute inset-0 h-full w-full object-cover object-[center_32%]"
+            draggable={false}
+            data-back-scene="1"
+          />
+
+          {hasFace ? (
             <>
-              {/* Theme friends backdrop */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={scene}
-                alt=""
-                aria-hidden
-                className={`absolute inset-0 h-full w-full object-cover object-[center_30%] ${
-                  hasFace ? "scale-110 opacity-55 blur-[1px]" : ""
-                }`}
-                draggable={false}
+              {/* Soft vignette so the inserted face sits in the crowd */}
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  background: `radial-gradient(ellipse at 50% 36%, transparent 28%, ${theme.accentDeep}33 72%, ${theme.accentDeep}55 100%)`,
+                }}
               />
-              {hasFace ? (
-                <>
-                  {/* Soft theme wash so outfit reads as selected palette */}
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      background: `radial-gradient(ellipse at 50% 40%, ${theme.accentSoft}cc 0%, transparent 62%), linear-gradient(180deg, transparent 40%, ${theme.accent}55 100%)`,
-                    }}
-                  />
-                  {/* Stylized user portrait — same face on Dana & name backs */}
+              {/* Stylized face — centered among the mascots, not a full-card bust */}
+              <div
+                className="absolute left-1/2 top-[34%] z-10 w-[46%] max-w-[9.5rem] -translate-x-1/2 -translate-y-1/2"
+                data-back-face-wrap="1"
+              >
+                <div
+                  className="relative aspect-square overflow-hidden rounded-full border-[3px] shadow-[0_6px_18px_rgba(0,0,0,.4)]"
+                  style={{
+                    borderColor: theme.accentDeep,
+                    boxShadow: `0 0 0 3px ${theme.accentSoft}, 0 8px 20px rgba(0,0,0,.35)`,
+                  }}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={faceUrl}
                     alt={`${title} — stylized portrait`}
-                    className="absolute inset-[6%] rounded-[14px] object-cover object-[center_22%] shadow-[0_8px_24px_rgba(0,0,0,.35)] ring-2"
-                    style={{ borderColor: theme.accentDeep }}
+                    className="h-full w-full scale-110 object-cover object-[center_16%]"
                     draggable={false}
                     data-back-face="1"
                   />
-                </>
-              ) : null}
+                </div>
+              </div>
             </>
-          )}
+          ) : null}
         </div>
 
         <p
