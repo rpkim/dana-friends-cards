@@ -570,14 +570,14 @@ export function CardStudio() {
             <CardFront data={data} />
           </div>
 
-          <div className="mx-auto grid w-full max-w-[400px] grid-cols-2 gap-3">
+          <div className="mx-auto w-full max-w-[400px] space-y-3">
             <div>
               <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/50">
                 Back
               </p>
               <CardBack theme={theme} />
             </div>
-            <div className="flex flex-col justify-end gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
                 type="button"
                 disabled={busy}
