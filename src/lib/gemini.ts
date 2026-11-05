@@ -316,8 +316,8 @@ export async function generateChibiImage(opts: {
         type: "text",
         text:
           photoKind === "friends-scene"
-            ? "Attached friends-scene layout reference: keep the dense mascot crowd energy (bunny, fox, donut, clouds) but REPLACE the central kid with the person from the photo — one unified illustration, no circular face sticker:"
-            : "Match the ART POLISH of this reference (style/quality only — invent original characters; no trademarks):",
+            ? "Attached friends-scene layout reference: keep the dense mascot crowd energy (bunny, fox, donut, clouds) but REPLACE the central kid with the person from the photo — one unified illustration, no circular face sticker. Keep natural warm peach skin on the face — do NOT copy any cyan/blue face paint from the reference:"
+            : "Match the ART POLISH of this reference (style/quality only — invent original characters; no trademarks). Keep natural skin tones — never theme-tint faces:",
       });
       content.push({
         type: "image",

@@ -11,8 +11,9 @@ Generate a high-resolution, print-ready A4 sheet containing two side-by-side tra
 
 [THEME & COLOR PALETTE]
 Primary Color Theme: {CHROME_PALETTE_STYLE}
-- Ensure BOTH front and back cards strictly use the {CHROME_PALETTE} color scheme.
+- Ensure BOTH front and back cards strictly use the {CHROME_PALETTE} color scheme on chrome, hoodie, border, and background only.
 - Do NOT alter or switch to other background colors like pink unless explicitly specified in the palette.
+- SKIN RULE (critical): Face, cheeks, nose, forehead, neck, and hands must be a natural human skin tone (warm peach / light tan). NEVER paint, tint, wash, or glow the skin with theme colors (no cyan/blue face mask on a blue theme, no pink face paint on a pink theme, no yellow face wash on a yellow theme). Theme color belongs on hoodie, card border, and background only.
 
 [CARD 1 - FRONT DESIGN]
 1. Frame Style: Authentic TCG trading card frame layout styled with {CHROME_PALETTE_STYLE} borders and star/energy icon decorations.
@@ -34,7 +35,7 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
 [CARD 2 - BACK DESIGN — BRAND TITLE, DO NOT RENAME]
 1. Frame Style: Matching {CHROME_PALETTE_STYLE} border frame and background pattern consistent with the front card.
 2. Top Title: Exactly "Dana & Friends" in large, adorable 3D cartoon font. Do NOT replace "Dana" with "{CARD_NAME}" or any other name.
-3. Center Graphic Box: Cute chibi illustration of the SAME person from the photo (same face/hair as the front stylized portrait) wearing the theme hoodie, surrounded by cute original anime mascot friends, celebrating together. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme).
+3. Center Graphic Box: Cute chibi illustration of the SAME person from the photo (same face/hair as the front stylized portrait) wearing the theme hoodie, surrounded by cute original anime mascot friends, celebrating together. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme). Natural skin on the face — no blue/cyan face paint or theme-color skin wash.
 4. Bottom Text: "LET'S PLAY TOGETHER!" and exactly "DANA'S SPECIAL CARD • 2026".
 
 [STRICT CONSTRAINTS]
@@ -42,6 +43,7 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
 - The back title must remain "Dana & Friends" — never "{CARD_NAME} & Friends" on this sheet.
 - Both left and right cards must maintain perfect horizontal symmetry and identical outer boundary dimensions.
 - Front and back must use the same chrome color scheme.
+- Natural skin tone on every human face and hands — never theme-tint the skin.
 - High quality 2D anime vector style, clean line art.`;
 
 /** Separate single-card back: "{CARD_NAME} & Friends". */
@@ -50,17 +52,19 @@ Generate ONE high-resolution trading-card BACK only (63mm x 88mm scale portrait)
 
 [THEME & COLOR PALETTE]
 Primary Color Theme: {CHROME_PALETTE_STYLE}
-- Ensure this back strictly uses the {CHROME_PALETTE} color scheme (same chrome as the matching front).
+- Ensure this back strictly uses the {CHROME_PALETTE} color scheme on chrome, hoodie, border, and background only (same as the matching front).
+- SKIN RULE: natural human skin on face and hands — never cyan/blue/pink/yellow face paint or theme-color skin wash.
 
 [BACK DESIGN]
 1. Frame Style: Authentic TCG card back frame with {CHROME_PALETTE_STYLE} border and matching background pattern.
 2. Top Title: Exactly "{CARD_NAME} & Friends" in large, adorable 3D cartoon font.
-3. Center Graphic Box: Cute chibi illustration of the SAME person from the provided photo (preserve recognizable face, hair, smile) wearing a theme-matching hoodie, surrounded by cute original anime mascot friends celebrating. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme).
+3. Center Graphic Box: Cute chibi illustration of the SAME person from the provided photo (preserve recognizable face, hair, smile, natural skin) wearing a theme-matching hoodie, surrounded by cute original anime mascot friends celebrating. Hood/ears/accents must match the theme colors (no yellow hood spikes on a blue theme).
 4. Bottom Text: "LET'S PLAY TOGETHER!" and "{CARD_NAME}'S SPECIAL CARD • 2026".
 
 [STRICT CONSTRAINTS]
 - This is the NAME back only — title is "{CARD_NAME} & Friends", not "Dana & Friends".
 - Do not draw a front card. Do not include a raw photo paste — stylized illustration only.
+- Natural skin tone on the face — theme color stays on hoodie/border/background only.
 - High quality 2D anime vector style, clean line art.`;
 
 /** Portrait-only for the live card art frame (never a full sheet). */
@@ -70,10 +74,12 @@ Stylize the person in the provided photo as a single cute anime/chibi trading-ca
 [THEME]
 {CHROME_PALETTE_STYLE}
 - Outfit: cute hoodie matching this theme. Hood/ears/accents must match the theme colors.
+- Theme color is for hoodie and background only — never for skin.
 
 [IDENTITY]
-- Same person as the photo: keep face, hair, skin tone, expression recognizable.
+- Same person as the photo: keep face, hair, natural skin tone, expression recognizable.
 - Full head and face visible. Soft cel shading, clean linework.
+- SKIN RULE (critical): Face and hands must be natural warm peach / light tan human skin. Do NOT apply cyan, blue, ice, pink, or yellow tint/wash/glow/paint across the face. Blue lighting in the background must not turn the cheeks blue.
 - Simple theme-matching background. No card frame, no text, no letters, no watermark.
 - NEVER output a raw/unedited photograph.`;
 
@@ -88,10 +94,12 @@ This is NOT a full card. No card frame, no title text, no "Dana & Friends", no n
 [THEME]
 {CHROME_PALETTE_STYLE}
 - The kid wears a cute hoodie matching this theme. Hood/ears/spikes/accents must match the theme colors (no yellow hoodie or yellow hood spikes on a blue theme).
+- Theme color belongs on hoodie + magical background only — never on skin.
 
 [SUBJECT — ONE UNIFIED ILLUSTRATION]
 - The kid in the MIDDLE of the crowd must be the SAME person as the attached photo (and matching any attached stylized portrait reference): same face, same hair, same smile, recognizable identity.
 - Draw them as a full chibi/anime character standing/celebrating in the scene — head, hair, torso, and theme hoodie as one continuous drawing.
+- SKIN RULE (critical): Face, cheeks, nose, forehead, neck, and hands are natural warm peach / light tan. NO cyan/blue face mask, NO blue blush wash, NO ice glow on skin, NO rectangular blue tint over the face. Soft pink cheek blush is OK.
 - Surround them densely with cute original anime mascot friends filling the frame: fluffy bunny, leafy fox, sprinkle donut buddy, smiling cloud pals, and similar friends crowded close (pink/orange/yellow accents on mascots are OK).
 - Magical theme-matching background (stars / sparkles / soft glow) behind the group.
 - Soft cel shading, clean linework, LOHA/Dana-friends polish.
@@ -100,6 +108,7 @@ This is NOT a full card. No card frame, no title text, no "Dana & Friends", no n
 - Do NOT paste a circular face cutout or photo sticker over another character.
 - Do NOT leave a stock girl/boy face underneath or beside the person.
 - Do NOT draw two faces for the central kid. One kid only — the stylized person from the photo.
+- Do NOT tint the face with the theme color.
 - Output only the friends-party illustration.`;
 
 /** Alias kept for existing imports / logging. */
@@ -127,9 +136,9 @@ export const CHROME_PALETTE_COPY: Record<
   },
   aura: {
     chromePalette:
-      "Theme: Vibrant ice-blue and cyan aura TCG card frame with blue crystal/star accents. Front card features a blue Squirtle/water hoodie character. Back card matches with bright blue border and water/ice style cute mascot friends.",
+      "Theme: Vibrant ice-blue and cyan aura TCG card frame with blue crystal/star accents. Front/back chrome, border, and hoodie are blue; magical blue sparkle background. The person's face and hands stay natural warm peach skin — never cyan/blue face paint or blue skin wash.",
     chromePaletteStyle:
-      "Theme: Vibrant ice-blue and cyan aura TCG card frame with blue crystal/star accents. Front card features a blue Squirtle/water hoodie character. Back card matches with bright blue border and water/ice style cute mascot friends.",
+      "Theme: Vibrant ice-blue and cyan aura TCG card frame with blue crystal/star accents. Front/back chrome, border, and hoodie are blue; magical blue sparkle background. The person's face and hands stay natural warm peach skin — never cyan/blue face paint or blue skin wash.",
   },
   autumn: {
     chromePalette:
