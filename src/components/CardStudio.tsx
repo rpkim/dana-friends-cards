@@ -118,8 +118,8 @@ export function CardStudio() {
         setArtPlan(plan);
         setStatus({
           kind: "ready",
-          en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
-          ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
+          en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory1}${plan.labels.accessory2 !== "None" ? ` + ${plan.labels.accessory2}` : ""} · ${plan.labels.backdrop}`,
+          ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory1}${plan.labels.accessory2 !== "None" ? ` + ${plan.labels.accessory2}` : ""} · ${plan.labels.backdrop}`,
         });
       });
       return next;
@@ -721,8 +721,8 @@ export function CardStudio() {
                 </div>
               ))}
               <p className="text-[11px] text-black/60">
-                Look / Outfit / Accessory / Backdrop update the art frame
-                immediately (baked portraits + tint / wash / accessory overlays).
+                Look / Outfit / Accessory 1 + 2 / Backdrop update the art frame
+                immediately (two accessory overlays stack independently).
                 Optional: ask Flash to remix pixels when image quota is available.
               </p>
               <button

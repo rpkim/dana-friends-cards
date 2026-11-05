@@ -1,10 +1,31 @@
-export type PartCategory = "look" | "outfit" | "accessory" | "backdrop";
+export type PartCategory =
+  | "look"
+  | "outfit"
+  | "accessory1"
+  | "accessory2"
+  | "backdrop";
+
+export type AccessoryKind =
+  | "none"
+  | "shades"
+  | "bow-bag"
+  | "star-pin"
+  | "donut"
+  | "hair-bow"
+  | "star-clip"
+  | "scarf"
+  | "headphones"
+  | "flower"
+  | "snack"
+  | "glasses";
 
 export type PartOption = {
   id: string;
   label: string;
-  category: PartCategory;
+  category: PartCategory | "accessory";
   prompt: string;
+  /** Overlay kind for accessory options */
+  accessoryKind?: AccessoryKind;
 };
 
 export type PartsSelection = Record<PartCategory, string>;
@@ -22,17 +43,112 @@ export type ArtPlan = {
   vignette: string;
   /** Optional CSS filter on the base portrait (look identity) */
   lookFilter: string;
-  /** Accessory overlay kind */
-  accessory: "none" | "shades" | "bow-bag" | "star-pin" | "donut";
+  /** Two independent accessory overlays (slot 1 + slot 2) */
+  accessories: [AccessoryKind, AccessoryKind];
   /** Short labels for the selection chip strip */
-  labels: { look: string; outfit: string; accessory: string; backdrop: string };
+  labels: {
+    look: string;
+    outfit: string;
+    accessory1: string;
+    accessory2: string;
+    backdrop: string;
+  };
 };
 
 export const PART_CATEGORIES: { id: PartCategory; label: string }[] = [
   { id: "look", label: "Look" },
   { id: "outfit", label: "Outfit" },
-  { id: "accessory", label: "Accessory" },
+  { id: "accessory1", label: "Accessory 1" },
+  { id: "accessory2", label: "Accessory 2" },
   { id: "backdrop", label: "Backdrop" },
+];
+
+/** Shared catalog for both accessory slots (independent picks). */
+export const ACCESSORY_OPTIONS: PartOption[] = [
+  {
+    id: "acc-none",
+    label: "None",
+    category: "accessory",
+    accessoryKind: "none",
+    prompt: "no extra accessory",
+  },
+  {
+    id: "acc-shades",
+    label: "Pink Shades",
+    category: "accessory",
+    accessoryKind: "shades",
+    prompt: "translucent pink heart-shaped sunglasses",
+  },
+  {
+    id: "acc-bow-bag",
+    label: "Bow Bag",
+    category: "accessory",
+    accessoryKind: "bow-bag",
+    prompt: "small black handbag with pink bows",
+  },
+  {
+    id: "acc-star-pin",
+    label: "Star Pin",
+    category: "accessory",
+    accessoryKind: "star-pin",
+    prompt: "bright gold friendship star pin on the chest",
+  },
+  {
+    id: "acc-donut",
+    label: "Donut",
+    category: "accessory",
+    accessoryKind: "donut",
+    prompt: "holding a cute frosted donut snack",
+  },
+  {
+    id: "acc-hair-bow",
+    label: "Hair Bow",
+    category: "accessory",
+    accessoryKind: "hair-bow",
+    prompt: "big soft pink hair bow on the side of the head",
+  },
+  {
+    id: "acc-star-clip",
+    label: "Star Clip",
+    category: "accessory",
+    accessoryKind: "star-clip",
+    prompt: "sparkly gold star hair clip near the bangs",
+  },
+  {
+    id: "acc-scarf",
+    label: "Scarf",
+    category: "accessory",
+    accessoryKind: "scarf",
+    prompt: "cozy striped knit scarf around the neck",
+  },
+  {
+    id: "acc-headphones",
+    label: "Headphones",
+    category: "accessory",
+    accessoryKind: "headphones",
+    prompt: "cute pastel over-ear headphones",
+  },
+  {
+    id: "acc-flower",
+    label: "Flower",
+    category: "accessory",
+    accessoryKind: "flower",
+    prompt: "fresh flower tucked behind the ear",
+  },
+  {
+    id: "acc-snack",
+    label: "Snack",
+    category: "accessory",
+    accessoryKind: "snack",
+    prompt: "holding a small pastry snack",
+  },
+  {
+    id: "acc-glasses",
+    label: "Glasses",
+    category: "accessory",
+    accessoryKind: "glasses",
+    prompt: "round soft-frame reading glasses",
+  },
 ];
 
 export const PARTS: PartOption[] = [
@@ -102,37 +218,6 @@ export const PARTS: PartOption[] = [
   },
 
   {
-    id: "acc-none",
-    label: "None",
-    category: "accessory",
-    prompt: "no extra accessory",
-  },
-  {
-    id: "acc-shades",
-    label: "Pink Shades",
-    category: "accessory",
-    prompt: "translucent pink heart-shaped sunglasses",
-  },
-  {
-    id: "acc-bow-bag",
-    label: "Bow Bag",
-    category: "accessory",
-    prompt: "small black handbag with pink bows",
-  },
-  {
-    id: "acc-star-pin",
-    label: "Star Pin",
-    category: "accessory",
-    prompt: "bright gold friendship star pin on the chest",
-  },
-  {
-    id: "acc-donut",
-    label: "Donut",
-    category: "accessory",
-    prompt: "holding a cute frosted donut snack",
-  },
-
-  {
     id: "bg-sunny",
     label: "Sunny Street",
     category: "backdrop",
@@ -171,11 +256,17 @@ export const PARTS: PartOption[] = [
 ];
 
 export function partsByCategory(category: PartCategory): PartOption[] {
+  if (category === "accessory1" || category === "accessory2") {
+    return ACCESSORY_OPTIONS;
+  }
   return PARTS.filter((p) => p.category === category);
 }
 
 export function getPart(id: string): PartOption | undefined {
-  return PARTS.find((p) => p.id === id);
+  return (
+    ACCESSORY_OPTIONS.find((p) => p.id === id) ||
+    PARTS.find((p) => p.id === id)
+  );
 }
 
 export function summarizeParts(parts: PartsSelection): string {
@@ -187,7 +278,8 @@ export function summarizeParts(parts: PartsSelection): string {
 export const DEFAULT_PARTS: PartsSelection = {
   look: "look-kid-a",
   outfit: "outfit-sunhood",
-  accessory: "acc-star-pin",
+  accessory1: "acc-star-pin",
+  accessory2: "acc-shades",
   backdrop: "bg-sunny",
 };
 
@@ -206,7 +298,7 @@ const LOOK_BASE: Record<string, string> = {
  * Look still applies a tint/filter so Look chips remain visible.
  */
 const OUTFIT_BASE: Record<string, string> = {
-  "outfit-sunhood": "", // keep look portrait (each look has a distinct base)
+  "outfit-sunhood": "",
   "outfit-maple": "/art/variants/maple-dress.jpg",
   "outfit-aura": "/art/variants/aura-hoodie.jpg",
   "outfit-kitty": "/art/variants/kitty-hoodie.jpg",
@@ -214,12 +306,14 @@ const OUTFIT_BASE: Record<string, string> = {
   "outfit-night": "/art/ritsuki.jpg",
 };
 
-/** Look identity tint — always visible even when outfit art replaces the base. */
 const LOOK_TINT: Record<string, string> = {
   "look-kid-a": "transparent",
-  "look-kid-b": "linear-gradient(180deg, rgba(255,150,60,.22), rgba(180,80,20,.18))",
-  "look-kid-c": "linear-gradient(180deg, rgba(60,100,255,.25), rgba(20,40,120,.2))",
-  "look-kid-d": "linear-gradient(180deg, rgba(255,120,190,.26), rgba(200,60,140,.18))",
+  "look-kid-b":
+    "linear-gradient(180deg, rgba(255,150,60,.22), rgba(180,80,20,.18))",
+  "look-kid-c":
+    "linear-gradient(180deg, rgba(60,100,255,.25), rgba(20,40,120,.2))",
+  "look-kid-d":
+    "linear-gradient(180deg, rgba(255,120,190,.26), rgba(200,60,140,.18))",
 };
 
 const LOOK_FILTER: Record<string, string> = {
@@ -271,37 +365,24 @@ const BACKDROP_WASH: Record<string, { wash: string; vignette: string }> = {
   },
 };
 
-const ACCESSORY_KIND: Record<string, ArtPlan["accessory"]> = {
-  "acc-none": "none",
-  "acc-shades": "shades",
-  "acc-bow-bag": "bow-bag",
-  "acc-star-pin": "star-pin",
-  "acc-donut": "donut",
-};
+function accessoryKindFor(id: string): AccessoryKind {
+  return getPart(id)?.accessoryKind || "none";
+}
 
 /**
  * Resolve baked portrait + mood overlays so every chip change is visible
- * even when Gemini image quota is 0.
- *
- * Priority:
- * - Look always picks a distinct base portrait (and tint/filter).
- * - Strong outfits swap in dedicated baked art, but Look tint/filter still apply.
- * - Backdrop never replaces the portrait — wash + vignette only.
- * - Accessory is an overlay.
+ * even when Gemini image quota is 0. Accessory 1 and 2 are independent.
  */
 export function artPlanFor(parts: PartsSelection): ArtPlan {
   const look = getPart(parts.look);
   const outfit = getPart(parts.outfit);
-  const accessory = getPart(parts.accessory);
+  const accessory1 = getPart(parts.accessory1);
+  const accessory2 = getPart(parts.accessory2);
   const backdrop = getPart(parts.backdrop);
 
   const lookUrl = LOOK_BASE[parts.look] || STARTER_ART;
   const outfitUrl = OUTFIT_BASE[parts.outfit] || "";
-
-  // Outfit wins only when it has dedicated art; otherwise keep look identity.
-  // Backdrop never overrides the portrait base.
   const artUrl = outfitUrl || lookUrl;
-
   const mood = BACKDROP_WASH[parts.backdrop] || BACKDROP_WASH["bg-sunny"];
 
   return {
@@ -311,11 +392,15 @@ export function artPlanFor(parts: PartsSelection): ArtPlan {
     backdropWash: mood.wash,
     vignette: mood.vignette,
     lookFilter: LOOK_FILTER[parts.look] || "none",
-    accessory: ACCESSORY_KIND[parts.accessory] || "none",
+    accessories: [
+      accessoryKindFor(parts.accessory1),
+      accessoryKindFor(parts.accessory2),
+    ],
     labels: {
       look: look?.label || "Look",
       outfit: outfit?.label || "Outfit",
-      accessory: accessory?.label || "None",
+      accessory1: accessory1?.label || "None",
+      accessory2: accessory2?.label || "None",
       backdrop: backdrop?.label || "Backdrop",
     },
   };
