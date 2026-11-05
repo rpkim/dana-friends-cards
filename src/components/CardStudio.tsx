@@ -22,15 +22,14 @@ import {
 } from "@/lib/captions";
 import {
   downloadDataUrl,
+  downloadPdfFromPngs,
   nodeToPng,
   printDataUrl,
-  printNode,
+  printDataUrls,
+  stitchPngsSideBySide,
 } from "@/lib/exportCard";
-import {
-  ACCESSORY_OPTIONS,
-  STARTER_ART,
-  getPart,
-} from "@/lib/parts";
+import { ATTACK_OPTIONS } from "@/lib/attacks";
+import { STARTER_ART } from "@/lib/parts";
 import {
   DEFAULT_IMAGE_MODEL_ID,
   IMAGE_MODEL_OPTIONS,
@@ -107,9 +106,6 @@ export function CardStudio() {
   const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
   /** Random HP + caption preset + chrome palette on generate / when toggled on. */
   const [randomTrio, setRandomTrio] = useState(false);
-  /** Two independent attach slots (accessories) for photo stylize. */
-  const [attach1, setAttach1] = useState("acc-none");
-  const [attach2, setAttach2] = useState("acc-none");
 
   useEffect(() => {
     setImageModel(readStoredImageModel());
@@ -163,6 +159,7 @@ export function CardStudio() {
   }, [imageModel]);
 
   const frontRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -330,14 +327,6 @@ export function CardStudio() {
       form.append("weakness", draft.weakness);
       form.append("resistance", draft.resistance);
       form.append("retreat", String(draft.retreat));
-      const a1 = getPart(attach1);
-      const a2 = getPart(attach2);
-      if (a1?.accessoryKind && a1.accessoryKind !== "none") {
-        form.append("accessory1", a1.prompt);
-      }
-      if (a2?.accessoryKind && a2.accessoryKind !== "none") {
-        form.append("accessory2", a2.prompt);
-      }
       const res = await fetch("/api/stylize", { method: "POST", body: form });
       let json: {
         image?: string;
@@ -476,78 +465,132 @@ export function CardStudio() {
     }
   }
 
-  async function downloadFront() {
-    setBusy(true);
-    try {
-      if (!frontRef.current) return;
-      await document.fonts.ready.catch(() => undefined);
-      const url = await nodeToPng(frontRef.current);
-      downloadDataUrl(
-        url,
-        `${(draft.name || "friend").toLowerCase()}-front.png`,
-      );
-      setStatus({
-        kind: "success",
-        en: "Front card downloaded.",
-      });
-    } catch (err) {
-      setStatus({
-        kind: "error",
-        en: err instanceof Error ? err.message : "Download failed.",
-      });
-    } finally {
-      setBusy(false);
-    }
+  function fileBase() {
+    return (draft.name || "friend").toLowerCase().replace(/[^\w.-]+/g, "-");
   }
 
-  async function downloadSheet() {
-    setShowPrint(true);
+  async function captureFrontPng() {
+    if (!frontRef.current) throw new Error("Front card not ready.");
+    return nodeToPng(frontRef.current);
+  }
+
+  async function captureBackPng() {
+    if (!backRef.current) throw new Error("Back card not ready.");
+    return nodeToPng(backRef.current);
+  }
+
+  async function capturePairPngs(): Promise<string[]> {
+    if (sheetUrl) return [sheetUrl];
+    const [front, back] = await Promise.all([
+      captureFrontPng(),
+      captureBackPng(),
+    ]);
+    return [front, back];
+  }
+
+  async function saveImage(kind: "front" | "back" | "pair") {
     setBusy(true);
     try {
-      if (sheetUrl) {
-        downloadDataUrl(
-          sheetUrl,
-          `${(draft.name || "friend").toLowerCase()}-print-sheet.png`,
-        );
-        setStatus({
-          kind: "success",
-          en: "Gemini A4 print sheet downloaded.",
-        });
+      const base = fileBase();
+      if (kind === "front") {
+        downloadDataUrl(await captureFrontPng(), `${base}-front.png`);
+        setStatus({ kind: "success", en: "Front card image saved." });
         return;
       }
-      await new Promise((r) => setTimeout(r, 100));
-      if (!printRef.current) return;
-      await document.fonts.ready.catch(() => undefined);
-      const url = await nodeToPng(printRef.current);
-      downloadDataUrl(
-        url,
-        `${(draft.name || "friend").toLowerCase()}-print-sheet.png`,
-      );
-      setStatus({
-        kind: "success",
-        en: "Print sheet downloaded.",
-      });
+      if (kind === "back") {
+        downloadDataUrl(await captureBackPng(), `${base}-back.png`);
+        setStatus({ kind: "success", en: "Back card image saved." });
+        return;
+      }
+      if (sheetUrl) {
+        downloadDataUrl(sheetUrl, `${base}-front-back.png`);
+      } else {
+        const [front, back] = await Promise.all([
+          captureFrontPng(),
+          captureBackPng(),
+        ]);
+        downloadDataUrl(
+          await stitchPngsSideBySide(front, back),
+          `${base}-front-back.png`,
+        );
+      }
+      setStatus({ kind: "success", en: "Front + back image saved." });
     } catch (err) {
       setStatus({
         kind: "error",
-        en: err instanceof Error ? err.message : "Download failed.",
+        en: err instanceof Error ? err.message : "Save image failed.",
       });
     } finally {
       setBusy(false);
     }
   }
 
-  async function handlePrint() {
-    setShowPrint(true);
+  async function savePdf(kind: "front" | "back" | "pair") {
     setBusy(true);
     try {
+      const base = fileBase();
+      if (kind === "front") {
+        await downloadPdfFromPngs(
+          [await captureFrontPng()],
+          `${base}-front.pdf`,
+          { layout: "portrait" },
+        );
+        setStatus({ kind: "success", en: "Front card PDF saved." });
+        return;
+      }
+      if (kind === "back") {
+        await downloadPdfFromPngs(
+          [await captureBackPng()],
+          `${base}-back.pdf`,
+          { layout: "portrait" },
+        );
+        setStatus({ kind: "success", en: "Back card PDF saved." });
+        return;
+      }
+      const pngs = await capturePairPngs();
+      await downloadPdfFromPngs(pngs, `${base}-front-back.pdf`, {
+        layout: "landscape",
+      });
+      setStatus({ kind: "success", en: "Front + back PDF saved." });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        en: err instanceof Error ? err.message : "Save PDF failed.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePrint(kind: "front" | "back" | "pair") {
+    setBusy(true);
+    try {
+      if (kind === "front") {
+        await printDataUrls([await captureFrontPng()], {
+          title: "Print front",
+          landscape: false,
+        });
+        setStatus({ kind: "success", en: "Print dialog opened (front)." });
+        return;
+      }
+      if (kind === "back") {
+        await printDataUrls([await captureBackPng()], {
+          title: "Print back",
+          landscape: false,
+        });
+        setStatus({ kind: "success", en: "Print dialog opened (back)." });
+        return;
+      }
       if (sheetUrl) {
         await printDataUrl(sheetUrl);
-        return;
+      } else {
+        const pngs = await capturePairPngs();
+        await printDataUrls(pngs, {
+          title: "Print front + back",
+          landscape: true,
+        });
       }
-      await new Promise((r) => setTimeout(r, 100));
-      if (!printRef.current) return;
-      await printNode(printRef.current);
+      setStatus({ kind: "success", en: "Print dialog opened (front + back)." });
     } catch (err) {
       setStatus({
         kind: "error",
@@ -610,7 +653,7 @@ export function CardStudio() {
                 {(draft.name.trim() || "FRIEND") + " & Friends"}
               </button>
             </div>
-            <div>
+            <div ref={backRef}>
               {backPreview === "dana" ? (
                 <CardBack
                   theme={theme}
@@ -627,31 +670,103 @@ export function CardStudio() {
                 />
               )}
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={downloadFront}
-                className="rounded-xl bg-black px-3 py-3 text-sm font-bold text-white disabled:opacity-50"
-              >
-                Download front
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={downloadSheet}
-                className="rounded-xl border-2 border-black bg-white px-3 py-3 text-sm font-bold disabled:opacity-50"
-              >
-                Download print sheet
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handlePrint}
-                className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-3 py-3 text-sm font-bold disabled:opacity-50"
-              >
-                Print front + back
-              </button>
+
+            <div className="space-y-3 rounded-2xl border border-black/10 bg-white/80 p-3">
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
+                  Save image
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveImage("front")}
+                    className="rounded-xl bg-black px-2 py-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveImage("back")}
+                    className="rounded-xl bg-black px-2 py-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveImage("pair")}
+                    className="rounded-xl bg-black px-2 py-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Front + Back
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
+                  Print
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handlePrint("front")}
+                    className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handlePrint("back")}
+                    className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handlePrint("pair")}
+                    className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front + Back
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
+                  Save PDF
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePdf("front")}
+                    className="rounded-xl border-2 border-black bg-white px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePdf("back")}
+                    className="rounded-xl border-2 border-black bg-white px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePdf("pair")}
+                    className="rounded-xl border-2 border-black bg-white px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front + Back
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -745,39 +860,65 @@ export function CardStudio() {
             {(
               [
                 {
-                  id: "attach1" as const,
-                  label: "Attach 1",
-                  value: attach1,
-                  set: setAttach1,
+                  id: "attack1" as const,
+                  label: "Attack 1",
+                  name: draft.attack1Name,
+                  apply: (atk: (typeof ATTACK_OPTIONS)[number]) =>
+                    patchDraft({
+                      attack1Name: atk.name,
+                      attack1Damage: atk.damage,
+                      attack1Text: atk.description,
+                    }),
                 },
                 {
-                  id: "attach2" as const,
-                  label: "Attach 2",
-                  value: attach2,
-                  set: setAttach2,
+                  id: "attack2" as const,
+                  label: "Attack 2",
+                  name: draft.attack2Name,
+                  apply: (atk: (typeof ATTACK_OPTIONS)[number]) =>
+                    patchDraft({
+                      attack2Name: atk.name,
+                      attack2Damage: atk.damage,
+                      attack2Text: atk.description,
+                    }),
                 },
               ] as const
             ).map((slot) => (
               <div key={slot.id} className="space-y-2" data-field={slot.id}>
-                <p className="text-xs font-bold uppercase tracking-wider text-black/50">
-                  {slot.label}
-                </p>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+                    {slot.label}
+                  </p>
+                  <p className="truncate text-[11px] font-semibold text-black/55">
+                    {slot.name}
+                    {slot.id === "attack1"
+                      ? ` · ${draft.attack1Damage}`
+                      : ` · ${draft.attack2Damage}`}
+                  </p>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  {ACCESSORY_OPTIONS.map((opt) => {
-                    const active = slot.value === opt.id;
+                  {ATTACK_OPTIONS.map((opt) => {
+                    const active = slot.name === opt.name;
                     return (
                       <button
                         key={`${slot.id}-${opt.id}`}
                         type="button"
-                        onClick={() => slot.set(opt.id)}
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
+                        onClick={() => slot.apply(opt)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold ${
                           active
                             ? "border-black bg-black text-white"
                             : "border-black/15 bg-white"
                         }`}
                         aria-pressed={active}
+                        title={opt.description}
                       >
-                        {opt.label}
+                        <span className="block leading-tight">{opt.name}</span>
+                        <span
+                          className={`block text-[10px] font-semibold ${
+                            active ? "text-white/70" : "text-black/45"
+                          }`}
+                        >
+                          {opt.damage} dmg
+                        </span>
                       </button>
                     );
                   })}
@@ -785,8 +926,8 @@ export function CardStudio() {
               </div>
             ))}
             <p className="text-[11px] font-medium text-black/55">
-              Pick up to two attaches. Both go into the Gemini portrait / print
-              prompt (independent — they do not wipe each other).
+              Pick Attack 1 and Attack 2 independently. Both show on the card
+              and go into the Gemini print prompt.
             </p>
           </div>
 

@@ -25,7 +25,7 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
    - Subject: Stylize the person in the provided user photo as a cute anime/chibi character (referencing the input image while preserving recognizable facial features, hair, and smile).
    - NEVER paste or embed the raw photograph — the front art must be a stylized illustrated portrait of the same person.
    - Character Outfit: Wearing a cute hoodie matching the theme.
-   - Accessories (Attach 1 + Attach 2 — draw BOTH when listed): {ACCESSORIES}.
+   - Accessories (draw EVERY listed accessory): {ACCESSORIES}.
    - Caption Badge inside/below art box: "{CAPTION_UNDER_ART}".
 4. Attack & Stats Area:
    - Standard TCG attack layout with skill names, descriptions, damage numbers, weakness, and retreat stats matching the card theme.
@@ -81,7 +81,7 @@ Stylize the person in the provided photo as a single cute anime/chibi trading-ca
 - Same person as the photo: keep face, hair, natural skin tone, expression recognizable.
 - Full head and face visible. Soft cel shading, clean linework.
 - SKIN RULE (critical): Face and hands must be natural warm peach / light tan human skin. Do NOT apply cyan, blue, ice, pink, or yellow tint/wash/glow/paint across the face. Blue lighting in the background must not turn the cheeks blue.
-- Accessories (Attach 1 + Attach 2 — include BOTH when listed): {ACCESSORIES}.
+- Accessories (include EVERY listed accessory): {ACCESSORIES}.
 - Simple theme-matching background. No card frame, no text, no letters, no watermark.
 - NEVER output a raw/unedited photograph.`;
 
@@ -103,7 +103,7 @@ This is NOT a full card. No card frame, no title text, no "Dana & Friends", no n
 - Draw them as a full chibi/anime character standing/celebrating in the scene — head, hair, torso, and theme hoodie as one continuous drawing.
 - SKIN RULE (critical): Face, cheeks, nose, forehead, neck, and hands are natural warm peach / light tan. NO cyan/blue face mask, NO blue blush wash, NO ice glow on skin, NO rectangular blue tint over the face. Soft pink cheek blush is OK.
 - Surround them densely with cute original anime mascot friends filling the frame: fluffy bunny, leafy fox, sprinkle donut buddy, smiling cloud pals, and similar friends crowded close (pink/orange/yellow accents on mascots are OK).
-- Accessories on the central kid (Attach 1 + Attach 2 — include BOTH when listed): {ACCESSORIES}.
+- Accessories on the central kid (include EVERY listed accessory): {ACCESSORIES}.
 - Magical theme-matching background (stars / sparkles / soft glow) behind the group.
 - Soft cel shading, clean linework, LOHA/Dana-friends polish.
 
@@ -166,9 +166,9 @@ export type PhotoPrintSheetFields = {
   weakness?: string;
   resistance?: string;
   retreat?: number | string;
-  /** Optional Attach 1 prompt line (accessory slot 1). */
+  /** Optional accessory prompt line (slot 1). */
   accessory1?: string;
-  /** Optional Attach 2 prompt line (accessory slot 2). */
+  /** Optional accessory prompt line (slot 2). */
   accessory2?: string;
 };
 
