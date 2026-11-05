@@ -2,7 +2,6 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
 import type { PaletteId } from "@/lib/themes";
-import { warmSkinDataUrl } from "@/lib/warmSkin";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 180;
@@ -122,22 +121,15 @@ export async function POST(req: Request) {
       });
     }
 
-    // Theme blues stay on hoodie/bg — warm peach skin on face after generate.
-    const portraitImage = portraitR.ok
-      ? await warmSkinDataUrl(portraitR.image)
-      : undefined;
-    const friendsImage = friendsR.ok
-      ? await warmSkinDataUrl(friendsR.image)
-      : undefined;
-
+    // No warmSkin post-process — it muddy-stained foreheads brown.
     return NextResponse.json({
       image: sheetR.ok ? sheetR.image : undefined,
       kind: "print-sheet",
-      /** Unified kid-among-mascots scene for BOTH card backs (no face sticker). */
-      friendsScene: friendsImage,
+      /** Personalized friends scene for {name} & Friends back only. */
+      friendsScene: friendsR.ok ? friendsR.image : undefined,
       /** @deprecated alias — same as friendsScene */
-      nameBack: friendsImage,
-      portrait: portraitImage,
+      nameBack: friendsR.ok ? friendsR.image : undefined,
+      portrait: portraitR.ok ? portraitR.image : undefined,
       provider: "google-gemini",
       model: sheetR.ok
         ? sheetR.model

@@ -49,8 +49,10 @@ export function CardBack({
           : "card-back-title--sparkle";
   const sloganColor = theme.id === "aura" ? "#FFE56A" : theme.accentDeep;
   const footerColor = theme.id === "aura" ? "#A8C4FF" : theme.accentDeep;
-  const scene = sceneUrl || BACK_SCENE[theme.id];
-  const personalized = !!sceneUrl;
+  // Dana & Friends brand title always uses stock art — never personalized scene.
+  const isBrandDana = (title || "Dana & Friends").trim() === "Dana & Friends";
+  const scene = isBrandDana ? BACK_SCENE[theme.id] : sceneUrl || BACK_SCENE[theme.id];
+  const personalized = !isBrandDana && !!sceneUrl;
 
   return (
     <article
