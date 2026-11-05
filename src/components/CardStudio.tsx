@@ -19,6 +19,60 @@ import { THEME_LIST, THEMES, type ThemeId } from "@/lib/themes";
 
 type Mode = "parts" | "photo";
 
+const READY_STATUS =
+  "Ready — baked anime art is showing. Remix parts or tap Regenerate with Gemini.";
+
+/** Never surface raw framework/SDK strings like "Not Found" in the UI. */
+function friendlyStatus(input: {
+  reason?: string | null;
+  billing?: boolean;
+  httpStatus?: number;
+  okImage?: boolean;
+  model?: string;
+  context: "compose" | "stylize";
+}): string {
+  if (input.okImage) {
+    return input.context === "stylize"
+      ? `Photo stylized with ${input.model || "Gemini"}.`
+      : `Gemini art ready (${input.model || "image model"}).`;
+  }
+
+  const raw = (input.reason || "").trim();
+  const lower = raw.toLowerCase();
+  const billing =
+    input.billing ||
+    input.httpStatus === 402 ||
+    /402|resource_exhausted|prepayment credits|billing|quota/i.test(raw);
+
+  if (billing) {
+    return "Gemini credits are empty (402). Top up at ai.studio/projects — showing baked anime art for now.";
+  }
+
+  if (
+    input.httpStatus === 404 ||
+    lower === "not found" ||
+    /\b404\b/.test(lower) ||
+    /model .+ not found|not_found/i.test(raw)
+  ) {
+    return input.context === "stylize"
+      ? "Gemini stylize unavailable right now — showing current art. Try again after checking API access."
+      : "Live Gemini remix unavailable — showing baked anime art. You can still mix parts and print.";
+  }
+
+  if (!raw) {
+    return input.context === "stylize"
+      ? "Stylize unavailable — switch to Parts or check Gemini credits."
+      : READY_STATUS;
+  }
+
+  // Soften any other API noise; keep it short and actionable.
+  if (raw.length > 160) {
+    return `${raw.slice(0, 157)}… — showing baked art.`;
+  }
+  if (/showing baked|baked anime|credits/i.test(raw)) return raw;
+  return `${raw} — showing baked anime art.`;
+}
+
 export function CardStudio() {
   const [themeId, setThemeId] = useState<ThemeId>("dana");
   const [mode, setMode] = useState<Mode>("parts");
@@ -27,7 +81,7 @@ export function CardStudio() {
   const [customHp, setCustomHp] = useState<number | "">("");
   const [artUrl, setArtUrl] = useState(THEME_ART.dana);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(READY_STATUS);
   const [showPrint, setShowPrint] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
 
@@ -55,6 +109,7 @@ export function CardStudio() {
     setParts(next);
     setArtUrl(THEME_ART[themeId] || THEME_ART.dana);
     setMode("parts");
+    setStatus(READY_STATUS);
   }, [themeId]);
 
   useEffect(() => {
@@ -86,29 +141,48 @@ export function CardStudio() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: themeId, parts: nextParts }),
       });
-      const json = (await res.json()) as {
+      let json: {
         image?: string;
         fallback?: boolean;
         reason?: string;
         billing?: boolean;
         model?: string;
-      };
+        message?: string;
+        error?: string;
+      } = {};
+      try {
+        json = (await res.json()) as typeof json;
+      } catch {
+        json = {};
+      }
+      const reason = json.reason || json.message || json.error || null;
       if (json.image) {
         setArtUrl(json.image);
-        setStatus(`Gemini art ready (${json.model || "image model"}).`);
+        setStatus(
+          friendlyStatus({
+            okImage: true,
+            model: json.model,
+            context: "compose",
+          }),
+        );
       } else {
         setArtUrl(fallbackArtFor(themeId, nextParts));
         setStatus(
-          json.reason ||
-            "Using baked anime art — add Gemini credits for live remixes.",
+          friendlyStatus({
+            reason,
+            billing: json.billing,
+            httpStatus: res.status,
+            context: "compose",
+          }),
         );
       }
     } catch (err) {
       setArtUrl(fallbackArtFor(themeId, nextParts));
       setStatus(
-        err instanceof Error
-          ? err.message
-          : "Compose failed — showing baked art.",
+        friendlyStatus({
+          reason: err instanceof Error ? err.message : null,
+          context: "compose",
+        }),
       );
     } finally {
       setBusy(false);
@@ -176,24 +250,47 @@ export function CardStudio() {
       form.append("image", blob, "capture.jpg");
       form.append("theme", themeId);
       const res = await fetch("/api/stylize", { method: "POST", body: form });
-      const json = (await res.json()) as {
+      let json: {
         image?: string;
         fallback?: boolean;
         reason?: string;
         billing?: boolean;
         model?: string;
-      };
+        message?: string;
+        error?: string;
+      } = {};
+      try {
+        json = (await res.json()) as typeof json;
+      } catch {
+        json = {};
+      }
+      const reason = json.reason || json.message || json.error || null;
       if (json.image) {
         setArtUrl(json.image);
-        setStatus(`Photo stylized with ${json.model || "Gemini"}.`);
+        setStatus(
+          friendlyStatus({
+            okImage: true,
+            model: json.model,
+            context: "stylize",
+          }),
+        );
       } else {
         setStatus(
-          json.reason ||
-            "Stylize unavailable — switch to Parts or top up Gemini credits.",
+          friendlyStatus({
+            reason,
+            billing: json.billing,
+            httpStatus: res.status,
+            context: "stylize",
+          }),
         );
       }
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Stylize failed");
+      setStatus(
+        friendlyStatus({
+          reason: err instanceof Error ? err.message : null,
+          context: "stylize",
+        }),
+      );
     } finally {
       setBusy(false);
     }
@@ -478,11 +575,18 @@ export function CardStudio() {
             </div>
           )}
 
-          {status && (
-            <p className="rounded-xl bg-black/5 px-3 py-2 text-xs font-medium text-black/70">
-              {status}
-            </p>
-          )}
+          <p
+            role="status"
+            className={`rounded-xl px-3 py-2 text-xs font-medium ${
+              /credits are empty|402|top up/i.test(status || "")
+                ? "bg-amber-100 text-amber-950"
+                : /ready —|gemini art ready|photo stylized/i.test(status || "")
+                  ? "bg-emerald-50 text-emerald-950"
+                  : "bg-black/5 text-black/70"
+            }`}
+          >
+            {status || READY_STATUS}
+          </p>
           {busy && (
             <p className="animate-pulse text-xs font-bold text-[#2F6BFF]">
               Working…

@@ -178,11 +178,14 @@ export async function generateChibiImage(opts: {
     const message = err instanceof Error ? err.message : String(err);
     const billing =
       /402|RESOURCE_EXHAUSTED|prepayment credits|billing/i.test(message);
+    const notFound = /\bnot found\b|\b404\b|not_found/i.test(message);
     return {
       ok: false,
       reason: billing
         ? "Gemini API prepayment credits are depleted — top up at https://ai.studio/projects then retry."
-        : message,
+        : notFound
+          ? "Gemini image model unavailable right now."
+          : message,
       billing,
     };
   }
