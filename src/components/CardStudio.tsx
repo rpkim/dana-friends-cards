@@ -804,59 +804,16 @@ export function CardStudio() {
               />
             </label>
           </div>
-          <label className="block space-y-1 text-sm font-semibold">
-            Caption under art
-            <select
-              value={
-                captionSelect === CAPTION_AI_VALUE
-                  ? CAPTION_AI_VALUE
-                  : isCaptionPreset(draft.caption)
-                    ? draft.caption
-                    : captionSelect
-              }
-              onChange={(e) => void onCaptionSelect(e.target.value)}
-              disabled={busy}
-              className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2 disabled:opacity-60"
-              data-field="caption"
-            >
-              <option value={CAPTION_AI_VALUE}>{CAPTION_AI_LABEL}</option>
-              {CAPTION_PRESETS.map((preset) => (
-                <option key={preset} value={preset}>
-                  {preset}
-                </option>
-              ))}
-            </select>
-            {!isCaptionPreset(draft.caption) &&
-            captionSelect === CAPTION_AI_VALUE ? (
-              <span className="block text-xs font-medium text-black/55">
-                On card: {draft.caption}
-              </span>
-            ) : null}
-          </label>
-
-          <label
-            className="flex cursor-pointer items-start gap-3 rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-3"
-            data-random-trio="1"
+          <div
+            className="space-y-3 rounded-2xl border-2 border-black/15 bg-[#FFF8D6] p-3"
+            data-section="attacks"
           >
-            <input
-              type="checkbox"
-              checked={randomTrio}
-              onChange={(e) => onToggleRandomTrio(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-black"
-              data-field="random-trio"
-            />
-            <span className="space-y-0.5">
-              <span className="block text-sm font-bold">
-                Random HP, caption, and palette
-              </span>
-              <span className="block text-[11px] font-medium text-black/55">
-                When on, rolls all three now and again on every photo generate.
-                Caption rolls a preset only (not AI from photo).
-              </span>
-            </span>
-          </label>
-
-          <div className="space-y-3">
+            <div className="space-y-0.5">
+              <p className="text-sm font-bold tracking-tight">Attacks</p>
+              <p className="text-[11px] font-medium text-black/55">
+                Pick Attack 1 and Attack 2 — both update the card skill box.
+              </p>
+            </div>
             {(
               [
                 {
@@ -925,11 +882,59 @@ export function CardStudio() {
                 </div>
               </div>
             ))}
-            <p className="text-[11px] font-medium text-black/55">
-              Pick Attack 1 and Attack 2 independently. Both show on the card
-              and go into the Gemini print prompt.
-            </p>
           </div>
+
+          <label className="block space-y-1 text-sm font-semibold">
+            Caption under art
+            <select
+              value={
+                captionSelect === CAPTION_AI_VALUE
+                  ? CAPTION_AI_VALUE
+                  : isCaptionPreset(draft.caption)
+                    ? draft.caption
+                    : captionSelect
+              }
+              onChange={(e) => void onCaptionSelect(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2 disabled:opacity-60"
+              data-field="caption"
+            >
+              <option value={CAPTION_AI_VALUE}>{CAPTION_AI_LABEL}</option>
+              {CAPTION_PRESETS.map((preset) => (
+                <option key={preset} value={preset}>
+                  {preset}
+                </option>
+              ))}
+            </select>
+            {!isCaptionPreset(draft.caption) &&
+            captionSelect === CAPTION_AI_VALUE ? (
+              <span className="block text-xs font-medium text-black/55">
+                On card: {draft.caption}
+              </span>
+            ) : null}
+          </label>
+
+          <label
+            className="flex cursor-pointer items-start gap-3 rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-3"
+            data-random-trio="1"
+          >
+            <input
+              type="checkbox"
+              checked={randomTrio}
+              onChange={(e) => onToggleRandomTrio(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-black"
+              data-field="random-trio"
+            />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-bold">
+                Random HP, caption, and palette
+              </span>
+              <span className="block text-[11px] font-medium text-black/55">
+                When on, rolls all three now and again on every photo generate.
+                Caption rolls a preset only (not AI from photo).
+              </span>
+            </span>
+          </label>
 
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-black/50">
