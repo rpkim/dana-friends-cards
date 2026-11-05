@@ -15,7 +15,7 @@ export type StatusMsg = {
 
 export const READY_STATUS: StatusMsg = {
   kind: "ready",
-  en: "Ready — baked anime art is showing. Remix parts or tap Regenerate with Gemini.",
+  en: "Ready — upload or capture a photo to stylize with Gemini.",
 };
 
 /** Only for a literal HTTP 402 from Gemini Prepay. */
@@ -51,7 +51,7 @@ export function rateLimitStatus(detail?: string): StatusMsg {
 export function stylizeLoading(): StatusMsg {
   return {
     kind: "loading",
-    en: "Sending photo to Gemini for anime/chibi stylization…",
+    en: "Creating A4 print sheet (front + back) from photo…",
   };
 }
 
@@ -65,7 +65,7 @@ export function composeLoading(): StatusMsg {
 export function stylizeSuccess(model?: string): StatusMsg {
   return {
     kind: "success",
-    en: `Photo stylized and applied to the card${model ? ` (${model})` : ""}.`,
+    en: `A4 print sheet ready — front + back side by side${model ? ` (${model})` : ""}.`,
   };
 }
 
@@ -104,7 +104,6 @@ export function classifyGeminiFailure(input: {
   const lower = raw.toLowerCase();
   const status = input.httpStatus;
 
-  // 429 / free-tier / RESOURCE_EXHAUSTED first — must win over legacy billing:true flags
   if (
     status === 429 ||
     /free_tier_.*limit:\s*0|generate_content_free_tier|quota.*limit:\s*0/i.test(
@@ -127,7 +126,6 @@ export function classifyGeminiFailure(input: {
     }
   }
 
-  // Literal 402 only
   if (status === 402) return "prepay_402";
 
   if (

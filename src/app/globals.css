@@ -78,14 +78,14 @@
 
 /**
  * Face-safe art framing (baked portraits, Gemini results, photo preview):
- * - cover fills the window like Dana/LOHA example cards
- * - NEVER `object-top` — that kept sky/ears and chopped through nose/chin
- * - Bias slightly below center so chin + mouth stay inside; ear tips may clip
- * - Pair with `.card-art-frame { flex-shrink: 0 }` so flex cannot crush the window
+ * - cover fills the leftover art window (flex-1 after shrink-0 lower half)
+ * - Bias toward the upper-mid so full face + chin stay in frame (not torso-only)
+ * - NEVER object-top alone — that chops through mouth/chin on tall portraits
  */
 .card-art-image {
   object-fit: cover;
-  object-position: center 48%;
+  /* Upper-mid bias: full face + chin; hood tips may clip slightly */
+  object-position: center 28%;
 }
 
 body {
@@ -128,6 +128,46 @@ body {
 .card-front,
 .card-back {
   animation: soft-pop 0.55s ease-out both;
+}
+
+/* Card-back brand title — bubble outline per palette */
+.card-back-title--electric {
+  color: #1a2b8f;
+  text-shadow:
+    -2px -2px 0 #ffe56a,
+    2px -2px 0 #ffe56a,
+    -2px 2px 0 #ffe56a,
+    2px 2px 0 #ffe56a,
+    0 0 0 #1a1a1a,
+    3px 3px 0 rgba(0, 0, 0, 0.15);
+}
+.card-back-title--autumn {
+  color: #5c2e0a;
+  text-shadow:
+    -2px -2px 0 #ffd48a,
+    2px -2px 0 #ffd48a,
+    -2px 2px 0 #ffd48a,
+    2px 2px 0 #ffd48a,
+    3px 3px 0 rgba(0, 0, 0, 0.15);
+}
+.card-back-title--aura {
+  color: #ffe56a;
+  text-shadow:
+    -2px -2px 0 #2f6bff,
+    2px -2px 0 #2f6bff,
+    -2px 2px 0 #2f6bff,
+    2px 2px 0 #2f6bff,
+    3px 3px 0 #020814;
+}
+.card-back-title--sparkle {
+  color: #ff7ab8;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    -3px -3px 0 #6b1f52,
+    3px 3px 0 #6b1f52;
 }
 
 @media print {

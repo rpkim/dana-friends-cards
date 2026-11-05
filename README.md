@@ -17,10 +17,18 @@ Original motifs only — no Nintendo / Pokémon trademarks.
 | Env | Default | Role |
 |---|---|---|
 | `GOOGLE_GENERATIVE_AI_API_KEY` or `GEMINI_API_KEY` | — | Google Generative Language API key |
-| `GEMINI_MODEL` | `gemini-4-argon` | Style direction (text/vision — Argon does **not** emit image pixels) |
-| `GEMINI_IMAGE_MODEL` | `gemini-3-pro-image` | Frame art + photo stylization (image output) |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Style direction (text/vision) |
+| `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image` | Default image model when the UI picker does not override |
 
-If Google returns **402 / prepayment credits depleted**, top up at [AI Studio projects](https://ai.studio/projects). The studio still loads with baked anime portraits under `public/art/`.
+Studio UI includes an **image model picker** (Photo → Gemini + parts remix):
+
+1. `gemini-3.1-flash-image` (default)
+2. `gemini-nano-banana-2.1`
+3. `gemini-3-pro-image`
+4. `gemini-2.5-flash-image`
+5. `gemini-3.6-flash` (listed; may be text-only — real API errors shown, no silent swap)
+
+The selected id is sent per request — failures show that model’s real API error (no silent substitute). If Google returns **429 free-tier image quota (limit: 0)** or **402 prepay**, enable billing / top up at [AI Studio projects](https://ai.studio/projects). The studio still loads with baked anime portraits + parts-mixer overlays under `public/art/`.
 
 ## Quick start
 

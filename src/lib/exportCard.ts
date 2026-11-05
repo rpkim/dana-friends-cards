@@ -48,8 +48,7 @@ export function downloadDataUrl(dataUrl: string, filename: string) {
   a.remove();
 }
 
-export async function printNode(node: HTMLElement) {
-  const dataUrl = await nodeToPng(node, { pixelRatio: 2 });
+export async function printDataUrl(dataUrl: string) {
   const win = window.open(
     "",
     "_blank",
@@ -58,11 +57,16 @@ export async function printNode(node: HTMLElement) {
   if (!win) throw new Error("Popup blocked — allow popups to print.");
   win.document.write(`<!doctype html><html><head><title>Print Dana Card</title>
     <style>
-      @page { size: letter landscape; margin: 0.4in; }
+      @page { size: A4 landscape; margin: 0.4in; }
       html, body { margin: 0; background: #fff; }
       img { width: 100%; height: auto; display: block; }
     </style></head><body>
     <img src="${dataUrl}" alt="Print sheet" onload="setTimeout(()=>{window.focus();window.print();},250)" />
     </body></html>`);
   win.document.close();
+}
+
+export async function printNode(node: HTMLElement) {
+  const dataUrl = await nodeToPng(node, { pixelRatio: 2 });
+  await printDataUrl(dataUrl);
 }

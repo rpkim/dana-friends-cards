@@ -1,6 +1,19 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
+import {
+  DEFAULT_IMAGE_MODEL_ID,
+  parseRequestedImageModel,
+} from "@/lib/imageModels";
+import {
+  buildFriendsScenePrompt,
+  buildNameFriendsBackPrompt,
+  buildPhotoPrintSheetPrompt,
+  buildPortraitPrompt,
+  type PhotoPrintSheetFields,
+} from "@/lib/photoStylizePrompt";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
+
+export type PhotoGenKind = "sheet" | "name-back" | "portrait" | "friends-scene";
 
 export function getGeminiApiKey(): string | undefined {
   return (
@@ -28,38 +41,32 @@ export function styleFallbackModelId() {
   return process.env.GEMINI_STYLE_FALLBACK_MODEL || "gemini-3.5-flash";
 }
 
-/** Primary image model: Flash image. Argon/Pro-image kept as later optional fallbacks. */
+/** Env default image model — gemini-3.1-flash-image unless overridden. */
 export function imageModelId() {
-  return process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+  return process.env.GEMINI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL_ID;
 }
 
-/** Try Flash image variants first; Argon/Pro only as optional later fallbacks. */
-export function imageFallbackModelIds(): string[] {
-  const raw = process.env.GEMINI_IMAGE_FALLBACK_MODELS || "";
-  const listed = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const defaults = [
-    "gemini-2.5-flash-image",
-    "gemini-3.1-flash-image",
-    "gemini-3.1-flash-lite-image",
-    "gemini-3.1-flash-image-preview",
-    // optional later if billing unlocks them:
-    "gemini-3-pro-image",
-    "gemini-4-argon",
-  ];
-  const primary = imageModelId();
-  return [...new Set([primary, ...listed, ...defaults])];
+/**
+ * Resolve the single image model for a request.
+ * Per-request picker id wins; otherwise env / default.
+ * Never silently substitutes a different model — invalid ids error out.
+ */
+export function resolveRequestImageModel(
+  requested?: string | null,
+): { ok: true; id: string } | { ok: false; reason: string } {
+  if (requested && requested.trim()) {
+    return parseRequestedImageModel(requested);
+  }
+  const envId = process.env.GEMINI_IMAGE_MODEL?.trim();
+  if (envId) return parseRequestedImageModel(envId);
+  return { ok: true, id: DEFAULT_IMAGE_MODEL_ID };
 }
 
-const STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
-Write ONE dense image-generation prompt for polished anime/chibi TCG portrait art.
-Match the visual BAR of premium custom cards like the LOHA snack/night examples and Dana & Friends samples:
-big shiny eyes, soft cel shading, cute proportions, painted environment backgrounds, clean linework.
-Square composition for a trading-card art window, character centered chest-up (or scene that fits the type).
-CRITICAL framing: keep the FULL face visible with margin below the chin — never crop through nose/mouth; leave a little space under the chin and include upper chest. Tall hoods/ears may extend upward but the face must sit fully inside the frame.
-ORIGINAL designs only — no Poké Balls, no Nintendo/Pokémon names or trademarks.
+/** Parts-mixer only — never used for photo stylize (photo uses PHOTO_STYLIZE_INSTRUCTION). */
+const PARTS_STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
+Write ONE dense image-generation prompt for polished anime/chibi TCG portrait art from parts.
+Match LOHA/Dana-friends example polish: soft cel shading, cute proportions, painted backgrounds, clean linework.
+Keep the FULL face visible with margin under the chin. ORIGINAL designs only — no Nintendo trademarks.
 Return ONLY the prompt text.`;
 
 export async function buildChibiPrompt(input: {
@@ -68,18 +75,34 @@ export async function buildChibiPrompt(input: {
   typeLabel?: string;
   partsSummary?: string;
   extra?: string;
+  cardFields?: PhotoPrintSheetFields;
+  photoKind?: PhotoGenKind;
 }): Promise<string> {
+  // Photo mode: pick sheet / name-back / portrait / friends-scene template.
+  if (input.mode === "photo") {
+    if (input.photoKind === "name-back") {
+      return buildNameFriendsBackPrompt(input.cardFields);
+    }
+    if (input.photoKind === "portrait") {
+      return buildPortraitPrompt(input.cardFields);
+    }
+    if (input.photoKind === "friends-scene") {
+      return buildFriendsScenePrompt(input.cardFields);
+    }
+    return buildPhotoPrintSheetPrompt(input.cardFields);
+  }
+
   const google = getGeminiClient();
-  const fallback = defaultPrompt(input);
+  const fallback = defaultPartsPrompt(input);
   if (!google) return fallback;
 
   const promptText = [
     `Chrome/style palette hint: ${input.theme}`,
     input.typeLabel ? `Card type label: ${input.typeLabel}` : "",
-    `Mode: ${input.mode}`,
+    `Mode: parts`,
     input.partsSummary ? `Parts: ${input.partsSummary}` : "",
     input.extra || "",
-    "Match LOHA/Dana-friends example polish (art quality), invent original character/outfit.",
+    "Match LOHA/Dana-friends example polish (art quality). Invent an original character from the parts — no trademarks.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -88,7 +111,7 @@ export async function buildChibiPrompt(input: {
     try {
       const result = await generateText({
         model: google(modelId),
-        system: STYLE_SYSTEM,
+        system: PARTS_STYLE_SYSTEM,
         prompt: promptText,
       });
       const text = result.text?.trim();
@@ -100,9 +123,8 @@ export async function buildChibiPrompt(input: {
   return fallback;
 }
 
-function defaultPrompt(input: {
+function defaultPartsPrompt(input: {
   theme: string;
-  mode: "photo" | "parts";
   typeLabel?: string;
   partsSummary?: string;
   extra?: string;
@@ -112,7 +134,7 @@ Palette/mood: ${input.theme}. Type: ${input.typeLabel || "custom"}.
 Big shiny eyes, soft cel shading, cute proportions, painted background.
 ${input.partsSummary || ""}
 ${input.extra || ""}
-Original designs only — no Poké Balls, no Nintendo trademarks. Square TCG art frame. Keep the entire face visible with margin under the chin — do not crop mid-face.`;
+Original designs only — no Poké Balls, no Nintendo trademarks. Keep the entire face visible with margin under the chin.`;
 }
 
 export type GeminiImageResult =
@@ -224,6 +246,12 @@ export async function generateChibiImage(opts: {
   extra?: string;
   sourceImage?: { base64: string; mediaType: string };
   referenceImage?: { base64: string; mediaType: string };
+  /** Per-request image model override from the UI picker. */
+  imageModel?: string | null;
+  /** Name / HP / attacks — only these strings may replace defaults in the A4 prompt. */
+  cardFields?: PhotoPrintSheetFields;
+  /** Which photo prompt to use. Default: A4 sheet with Dana & Friends back. */
+  photoKind?: PhotoGenKind;
 }): Promise<GeminiImageResult> {
   const google = getGeminiClient();
   if (!google) {
@@ -235,100 +263,200 @@ export async function generateChibiImage(opts: {
     };
   }
 
-  const prompt = await buildChibiPrompt({
-    theme: opts.theme,
-    mode: opts.mode,
-    typeLabel: opts.typeLabel,
-    partsSummary: opts.partsSummary,
-    extra: opts.extra,
-  });
+  const resolved = resolveRequestImageModel(opts.imageModel);
+  if (!resolved.ok) {
+    return { ok: false, reason: resolved.reason, errorKind: "other" };
+  }
+  const model = resolved.id;
+
+  const isPhoto = opts.mode === "photo" && !!opts.sourceImage;
+  const photoKind = opts.photoKind || "sheet";
+
+  // Photo path: template + attached photo (never text-only).
+  // Parts path: still builds a compose prompt (may invent character from parts).
+  const prompt = isPhoto
+    ? photoKind === "name-back"
+      ? buildNameFriendsBackPrompt(opts.cardFields)
+      : photoKind === "portrait"
+        ? buildPortraitPrompt(opts.cardFields)
+        : photoKind === "friends-scene"
+          ? buildFriendsScenePrompt(opts.cardFields)
+          : buildPhotoPrintSheetPrompt(opts.cardFields)
+    : await buildChibiPrompt({
+        theme: opts.theme,
+        mode: opts.mode,
+        typeLabel: opts.typeLabel,
+        partsSummary: opts.partsSummary,
+        extra: opts.extra,
+      });
+
+  // Log exact prompt used (never log API keys or image bytes).
+  console.info("[gemini] image model:", model);
+  console.info("[gemini] mode:", opts.mode);
+  console.info("[gemini] photoKind:", isPhoto ? photoKind : "n/a");
+  console.info("[gemini] prompt:\n" + prompt);
 
   const content: Array<
     | { type: "text"; text: string }
     | { type: "image"; image: string; mediaType?: string }
-  > = [{ type: "text", text: prompt }];
+  > = [];
 
-  if (opts.referenceImage) {
+  if (isPhoto && opts.sourceImage) {
+    // Photo FIRST as image input — identity source of truth.
     content.push({
       type: "text",
-      text: "Match the ART POLISH and chibi quality of this example card illustration (style/quality only — invent original characters; no trademarks):",
-    });
-    content.push({
-      type: "image",
-      image: `data:${opts.referenceImage.mediaType};base64,${opts.referenceImage.base64}`,
-    });
-  }
-
-  if (opts.sourceImage) {
-    content.push({
-      type: "text",
-      text: "Stylize THIS photo into the same polished anime/chibi card-art look while keeping likeness:",
+      text: "Attached photo of the person to stylize (identity source — keep this same person as the central kid):",
     });
     content.push({
       type: "image",
       image: `data:${opts.sourceImage.mediaType};base64,${opts.sourceImage.base64}`,
     });
-  }
-
-  let lastFail: Extract<GeminiImageResult, { ok: false }> | null = null;
-
-  for (const model of imageFallbackModelIds()) {
-    try {
-      const result = await generateText({
-        model: google(model),
-        providerOptions: {
-          google: {
-            responseModalities: ["TEXT", "IMAGE"],
-          },
-        },
-        messages: [{ role: "user", content }],
+    if (opts.referenceImage) {
+      content.push({
+        type: "text",
+        text:
+          photoKind === "friends-scene"
+            ? "Attached friends-scene layout reference: keep the dense mascot crowd energy (bunny, fox, donut, clouds) but REPLACE the central kid with the person from the photo — one unified illustration, no circular face sticker. Keep natural warm peach skin on the face — do NOT copy any cyan/blue face paint from the reference:"
+            : "Match the ART POLISH of this reference (style/quality only — invent original characters; no trademarks). Keep natural skin tones — never theme-tint faces:",
       });
-
-      const file = result.files?.find((f) =>
-        (f.mediaType || "").startsWith("image/"),
-      );
-      if (!file) {
-        lastFail = {
-          ok: false,
-          reason: `${model} returned no image. ${result.text?.slice(0, 180) || ""}`.trim(),
-          errorKind: "other",
-        };
-        continue;
-      }
-
-      const b64 =
-        typeof file.base64 === "string"
-          ? file.base64
-          : Buffer.from(file.uint8Array).toString("base64");
-
-      return {
-        ok: true,
-        image: `data:${file.mediaType};base64,${b64}`,
-        model,
-        prompt,
-      };
-    } catch (err) {
-      const classified = classifySdkError(err);
-      lastFail = {
-        ok: false,
-        reason: classified.message,
-        billing: classified.billing,
-        httpStatus: classified.httpStatus,
-        errorKind: classified.errorKind,
-      };
-      // Try next image model on quota / not-found; stop early on prepay 402 (all keys same project)
-      if (classified.errorKind === "prepay_402") break;
-      continue;
+      content.push({
+        type: "image",
+        image: `data:${opts.referenceImage.mediaType};base64,${opts.referenceImage.base64}`,
+      });
+    }
+    content.push({ type: "text", text: prompt });
+  } else {
+    content.push({ type: "text", text: prompt });
+    if (opts.referenceImage) {
+      content.push({
+        type: "text",
+        text: "Match the ART POLISH and chibi quality of this example (style/quality only — invent original characters; no trademarks):",
+      });
+      content.push({
+        type: "image",
+        image: `data:${opts.referenceImage.mediaType};base64,${opts.referenceImage.base64}`,
+      });
     }
   }
 
-  return (
-    lastFail || {
+  try {
+    const result = await generateText({
+      model: google(model),
+      // Do not mirror the long A4 prompt as system — send it once with the photo.
+      providerOptions: {
+        google: {
+          responseModalities: ["TEXT", "IMAGE"],
+        },
+      },
+      messages: [{ role: "user", content }],
+    });
+
+    const file = result.files?.find((f) =>
+      (f.mediaType || "").startsWith("image/"),
+    );
+    if (!file) {
+      return {
+        ok: false,
+        reason: `${model} returned no image. ${result.text?.slice(0, 220) || ""}`.trim(),
+        errorKind: "other",
+      };
+    }
+
+    const b64 =
+      typeof file.base64 === "string"
+        ? file.base64
+        : Buffer.from(file.uint8Array).toString("base64");
+
+    return {
+      ok: true,
+      image: `data:${file.mediaType};base64,${b64}`,
+      model,
+      prompt,
+    };
+  } catch (err) {
+    const classified = classifySdkError(err);
+    return {
+      ok: false,
+      reason: `[${model}] ${classified.message}`,
+      billing: classified.billing,
+      httpStatus: classified.httpStatus,
+      errorKind: classified.errorKind,
+    };
+  }
+}
+
+const CAPTION_SYSTEM = `You write ONE short trading-card caption for a kid photo.
+Style examples: "Cuteness 100%", "Energy 999", "Snack Attack Ready", "Tiny Legend".
+Rules: playful English, under 40 characters, no quotes, no emoji, no name inventing, no ages unless clearly visible.
+Return ONLY the caption text.`;
+
+export type CaptionResult =
+  | { ok: true; caption: string; model: string }
+  | {
+      ok: false;
+      reason: string;
+      billing?: boolean;
+      httpStatus?: number;
+      errorKind?: GeminiErrorKind;
+    };
+
+/** Text-model caption from the uploaded photo (gemini-2.5-flash by default). */
+export async function generateCaptionFromPhoto(opts: {
+  sourceImage: { base64: string; mediaType: string };
+}): Promise<CaptionResult> {
+  const google = getGeminiClient();
+  if (!google) {
+    return {
       ok: false,
       reason:
-        "Image generation quota is 0 on free tier for this project (HTTP 429). Enable billing/image access in AI Studio.",
-      httpStatus: 429,
-      errorKind: "free_tier_image_quota",
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY). Add it in .env.local / Vercel env.",
+      errorKind: "other",
+    };
+  }
+
+  const model = styleModelId(); // gemini-2.5-flash
+  try {
+    const result = await generateText({
+      model: google(model),
+      system: CAPTION_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Write one short card caption that fits this kid photo (same playful style as the presets):",
+            },
+            {
+              type: "image",
+              image: `data:${opts.sourceImage.mediaType};base64,${opts.sourceImage.base64}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    const raw = (result.text || "")
+      .trim()
+      .replace(/^["'“”]+|["'“”]+$/g, "")
+      .replace(/\s+/g, " ");
+    const caption = raw.slice(0, 40).trim();
+    if (!caption) {
+      return {
+        ok: false,
+        reason: `${model} returned an empty caption.`,
+        errorKind: "other",
+      };
     }
-  );
+    return { ok: true, caption, model };
+  } catch (err) {
+    const classified = classifySdkError(err);
+    return {
+      ok: false,
+      reason: `[${model}] ${classified.message}`,
+      billing: classified.billing,
+      httpStatus: classified.httpStatus,
+      errorKind: classified.errorKind,
+    };
+  }
 }

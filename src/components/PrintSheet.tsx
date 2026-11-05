@@ -3,31 +3,85 @@
 import { CardBack } from "@/components/CardBack";
 import { CardFront, type CardData } from "@/components/CardFront";
 
+export type PrintPairKind = "dana" | "name";
+
 type Props = {
   data: CardData;
+  /**
+   * Unified friends-party illustration (stylized kid among mascots).
+   * Same scene on Dana & Friends and {name} & Friends backs.
+   */
+  friendsSceneUrl?: string | null;
+  /** Card name for the name pair. */
+  cardName?: string;
+  /** Which 2-up pair to render. */
+  pair?: PrintPairKind;
 };
 
-/** 2-up front + back with crop marks. */
-export function PrintSheet({ data }: Props) {
+/**
+ * One 2-up print pair: front | back, pure white page, dashed fold line only.
+ */
+export function PrintSheet({
+  data,
+  friendsSceneUrl,
+  cardName,
+  pair = "dana",
+}: Props) {
+  const name = (cardName || data.customName || "FRIEND").trim() || "FRIEND";
+  const isDana = pair === "dana";
+  const backTitle = isDana ? "Dana & Friends" : `${name} & Friends`;
+  const backFooter = isDana
+    ? "Dana’s Special Card • 2026"
+    : `${name.toUpperCase()}'S SPECIAL CARD • 2026`;
+  const pairLabel = isDana ? "Dana & Friends pair" : `${name} & Friends pair`;
+
   return (
     <div
-      className="print-sheet relative mx-auto w-full max-w-[1100px] bg-[#f7f4ef] p-8"
-      style={{
-        backgroundImage:
-          "radial-gradient(rgba(0,0,0,.045) 1px, transparent 1px)",
-        backgroundSize: "12px 12px",
-      }}
+      className="print-sheet relative mx-auto w-full max-w-[1100px] p-8"
+      style={{ backgroundColor: "#FFFFFF", backgroundImage: "none" }}
+      data-pair={pair}
+      data-page-bg="#FFFFFF"
     >
       <CropMarks />
-      <div className="relative grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-10">
-        <div className="relative mx-auto w-full max-w-[360px]">
+      <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-black/45">
+        {pairLabel}
+      </p>
+      <div
+        className="relative grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-12"
+        style={{ backgroundColor: "#FFFFFF" }}
+      >
+        <div
+          className="relative mx-auto w-full max-w-[360px]"
+          style={{ backgroundColor: "#FFFFFF" }}
+        >
+          <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/45">
+            Front
+          </p>
           <CardFront data={data} />
         </div>
-        <div className="relative mx-auto w-full max-w-[360px]">
-          <CardBack theme={data.theme} />
+        <div
+          className="relative mx-auto w-full max-w-[360px]"
+          style={{ backgroundColor: "#FFFFFF" }}
+        >
+          <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/45">
+            Back — {backTitle}
+          </p>
+          <CardBack
+            theme={data.theme}
+            title={backTitle}
+            footer={backFooter}
+            sceneUrl={friendsSceneUrl}
+          />
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-y-10 left-1/2 hidden w-px -translate-x-1/2 border-l border-dashed border-black/40 md:block" />
+      {/* Dashed fold line only — white gap, no scissors, no CUT OR FOLD text */}
+      <div
+        className="pointer-events-none absolute inset-y-14 left-1/2 hidden w-4 -translate-x-1/2 md:block"
+        style={{ backgroundColor: "#FFFFFF" }}
+        aria-hidden
+      >
+        <div className="mx-auto h-full w-0 border-l-2 border-dashed border-black/55" />
+      </div>
     </div>
   );
 }

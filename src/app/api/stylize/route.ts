@@ -1,16 +1,45 @@
-import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
-import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
+import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
+import type { PaletteId } from "@/lib/themes";
+import { warmSkinDataUrl } from "@/lib/warmSkin";
+import { NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 180;
+
+const FRIENDS_REF: Record<PaletteId, string> = {
+  electric: "friends-electric.jpg",
+  autumn: "friends-autumn.jpg",
+  aura: "friends-aura.jpg",
+  sparkle: "friends-sparkle.jpg",
+};
+
+async function loadFriendsReference(palette: string) {
+  const id = (palette in FRIENDS_REF ? palette : "electric") as PaletteId;
+  const file = path.join(
+    process.cwd(),
+    "public",
+    "art",
+    "backs",
+    FRIENDS_REF[id],
+  );
+  try {
+    const buf = await readFile(file);
+    return {
+      base64: buf.toString("base64"),
+      mediaType: "image/jpeg",
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 export async function POST(req: Request) {
   if (!getGeminiApiKey()) {
     return NextResponse.json({
       fallback: true,
       reason:
-        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Parts/print still work with preview art.",
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Print chrome still works with preview art.",
     });
   }
 
@@ -18,8 +47,22 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("image");
     const palette = String(form.get("palette") || form.get("theme") || "electric");
-    const typeLabel = String(form.get("typeLabel") || "Custom Type");
-    const exampleRef = String(form.get("exampleRef") || "");
+    const typeLabel = String(form.get("typeLabel") || "");
+    const imageModel = String(
+      form.get("imageModel") || form.get("GEMINI_IMAGE_MODEL") || "",
+    );
+    const name = String(form.get("name") || "");
+    const hp = String(form.get("hp") || "");
+    const caption = String(form.get("caption") || "");
+    const attack1Name = String(form.get("attack1Name") || "");
+    const attack1Damage = String(form.get("attack1Damage") || "");
+    const attack1Text = String(form.get("attack1Text") || "");
+    const attack2Name = String(form.get("attack2Name") || "");
+    const attack2Damage = String(form.get("attack2Damage") || "");
+    const attack2Text = String(form.get("attack2Text") || "");
+    const weakness = String(form.get("weakness") || "");
+    const resistance = String(form.get("resistance") || "");
+    const retreat = String(form.get("retreat") || "");
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
@@ -27,68 +70,96 @@ export async function POST(req: Request) {
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = file.type || "image/jpeg";
-
-    const referenceImage = await loadReference(exampleRef, palette);
-
-    const result = await generateChibiImage({
-      theme: palette,
-      mode: "photo",
+    const sourceImage = {
+      base64: bytes.toString("base64"),
+      mediaType,
+    };
+    const cardFields = {
+      paletteId: palette,
+      name,
+      hp,
       typeLabel,
-      extra:
-        "Keep the person recognizable as a cute anime chibi; chest-up TCG portrait at LOHA/Dana-friends example polish.",
-      sourceImage: {
-        base64: bytes.toString("base64"),
-        mediaType,
-      },
-      referenceImage,
-    });
+      caption,
+      attack1Name,
+      attack1Damage,
+      attack1Text,
+      attack2Name,
+      attack2Damage,
+      attack2Text,
+      weakness,
+      resistance,
+      retreat,
+    };
+    const friendsRef = await loadFriendsReference(palette);
+    const common = {
+      theme: palette,
+      mode: "photo" as const,
+      typeLabel,
+      sourceImage,
+      imageModel: imageModel || undefined,
+      cardFields,
+    };
 
-    if (!result.ok) {
+    // Sheet, unified friends-scene (shared by both backs), and front portrait.
+    const [sheetR, friendsR, portraitR] = await Promise.all([
+      generateChibiImage({ ...common, photoKind: "sheet" }),
+      generateChibiImage({
+        ...common,
+        photoKind: "friends-scene",
+        referenceImage: friendsRef,
+      }),
+      generateChibiImage({ ...common, photoKind: "portrait" }),
+    ]);
+
+    if (!sheetR.ok && !friendsR.ok && !portraitR.ok) {
+      const fail = !sheetR.ok ? sheetR : !friendsR.ok ? friendsR : portraitR;
       return NextResponse.json({
         fallback: true,
-        reason: result.reason,
-        billing: result.billing || false,
-        httpStatus: result.httpStatus,
-        errorKind: result.errorKind,
+        reason: !fail.ok ? fail.reason : "All image generations failed",
+        billing: !fail.ok ? fail.billing || false : false,
+        httpStatus: !fail.ok ? fail.httpStatus : undefined,
+        errorKind: !fail.ok ? fail.errorKind : undefined,
       });
     }
 
+    // Theme blues stay on hoodie/bg — warm peach skin on face after generate.
+    const portraitImage = portraitR.ok
+      ? await warmSkinDataUrl(portraitR.image)
+      : undefined;
+    const friendsImage = friendsR.ok
+      ? await warmSkinDataUrl(friendsR.image)
+      : undefined;
+
     return NextResponse.json({
-      image: result.image,
+      image: sheetR.ok ? sheetR.image : undefined,
+      kind: "print-sheet",
+      /** Unified kid-among-mascots scene for BOTH card backs (no face sticker). */
+      friendsScene: friendsImage,
+      /** @deprecated alias — same as friendsScene */
+      nameBack: friendsImage,
+      portrait: portraitImage,
       provider: "google-gemini",
-      model: result.model,
+      model: sheetR.ok
+        ? sheetR.model
+        : portraitR.ok
+          ? portraitR.model
+          : friendsR.ok
+            ? friendsR.model
+            : undefined,
       styleModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      prompt: sheetR.ok ? sheetR.prompt : undefined,
+      friendsScenePrompt: friendsR.ok ? friendsR.prompt : undefined,
+      portraitPrompt: portraitR.ok ? portraitR.prompt : undefined,
+      partial: {
+        sheet: sheetR.ok,
+        friendsScene: friendsR.ok,
+        nameBack: friendsR.ok,
+        portrait: portraitR.ok,
+      },
+      reason: !sheetR.ok && "reason" in sheetR ? sheetR.reason : undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Stylize failed";
     return NextResponse.json({ fallback: true, reason: message });
   }
-}
-
-async function loadReference(
-  exampleRef: string,
-  palette: string,
-): Promise<{ base64: string; mediaType: string } | undefined> {
-  const candidates = [
-    exampleRef,
-    `/examples/${palette === "autumn" ? "loha-snack" : palette === "aura" ? "loha-night" : "dana"}.webp`,
-    `/art/${palette === "electric" ? "dana" : palette === "autumn" ? "thea" : palette === "aura" ? "ritsuki" : "josephine"}.jpg`,
-  ].filter(Boolean);
-
-  for (const ref of candidates) {
-    try {
-      const cleaned = ref.replace(/^\//, "");
-      if (cleaned.includes("..")) continue;
-      const buf = await readFile(path.join(process.cwd(), "public", cleaned));
-      const mediaType = cleaned.endsWith(".webp")
-        ? "image/webp"
-        : cleaned.endsWith(".png")
-          ? "image/png"
-          : "image/jpeg";
-      return { base64: buf.toString("base64"), mediaType };
-    } catch {
-      /* try next */
-    }
-  }
-  return undefined;
 }
