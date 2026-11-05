@@ -1,3 +1,4 @@
+import { DEFAULT_CAPTION } from "@/lib/captions";
 import { THEMES, type PaletteId, type Theme } from "@/lib/themes";
 
 /** Editable fields for any custom card — not locked to example characters. */
@@ -26,7 +27,7 @@ export function draftFromPalette(paletteId: PaletteId): CardDraft {
     name: "",
     hp: t.hp,
     typeLabel: t.playType.replace(/^Play Type\s*•\s*/i, "") + " Type",
-    caption: "Cuteness 100%",
+    caption: DEFAULT_CAPTION,
     attack1Name: t.attacks[0].name,
     attack1Damage: t.attacks[0].damage,
     attack1Text: t.attacks[0].description,

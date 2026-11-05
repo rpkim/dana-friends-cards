@@ -26,6 +26,7 @@ Studio UI includes an **image model picker** (Photo → Gemini + parts remix):
 2. `gemini-nano-banana-2.1`
 3. `gemini-3-pro-image`
 4. `gemini-2.5-flash-image`
+5. `gemini-3.6-flash` (listed; may be text-only — real API errors shown, no silent swap)
 
 The selected id is sent per request — failures show that model’s real API error (no silent substitute). If Google returns **429 free-tier image quota (limit: 0)** or **402 prepay**, enable billing / top up at [AI Studio projects](https://ai.studio/projects). The studio still loads with baked anime portraits + parts-mixer overlays under `public/art/`.
 

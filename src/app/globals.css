@@ -130,6 +130,46 @@ body {
   animation: soft-pop 0.55s ease-out both;
 }
 
+/* Card-back brand title — bubble outline per palette */
+.card-back-title--electric {
+  color: #1a2b8f;
+  text-shadow:
+    -2px -2px 0 #ffe56a,
+    2px -2px 0 #ffe56a,
+    -2px 2px 0 #ffe56a,
+    2px 2px 0 #ffe56a,
+    0 0 0 #1a1a1a,
+    3px 3px 0 rgba(0, 0, 0, 0.15);
+}
+.card-back-title--autumn {
+  color: #5c2e0a;
+  text-shadow:
+    -2px -2px 0 #ffd48a,
+    2px -2px 0 #ffd48a,
+    -2px 2px 0 #ffd48a,
+    2px 2px 0 #ffd48a,
+    3px 3px 0 rgba(0, 0, 0, 0.15);
+}
+.card-back-title--aura {
+  color: #ffe56a;
+  text-shadow:
+    -2px -2px 0 #2f6bff,
+    2px -2px 0 #2f6bff,
+    -2px 2px 0 #2f6bff,
+    2px 2px 0 #2f6bff,
+    3px 3px 0 #020814;
+}
+.card-back-title--sparkle {
+  color: #ff7ab8;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    -3px -3px 0 #6b1f52,
+    3px 3px 0 #6b1f52;
+}
+
 @media print {
   body {
     background: #fff !important;

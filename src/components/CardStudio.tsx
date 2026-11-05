@@ -12,6 +12,13 @@ import {
   themeFromDraft,
   type CardDraft,
 } from "@/lib/cardModel";
+import {
+  CAPTION_AI_LABEL,
+  CAPTION_AI_VALUE,
+  CAPTION_PRESETS,
+  DEFAULT_CAPTION,
+  isCaptionPreset,
+} from "@/lib/captions";
 import { downloadDataUrl, nodeToPng, printNode } from "@/lib/exportCard";
 import {
   DEFAULT_PARTS,
@@ -68,6 +75,8 @@ export function CardStudio() {
   const [showPrint, setShowPrint] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
+  /** Select value: a preset label, or CAPTION_AI_VALUE while AI is chosen. */
+  const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
 
   useEffect(() => {
     setImageModel(readStoredImageModel());
@@ -88,6 +97,8 @@ export function CardStudio() {
   /** Gallery / Files only — never set `capture` (iOS would force camera). */
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
+  /** Last uploaded / captured photo — required for AI caption. */
+  const photoBlobRef = useRef<Blob | null>(null);
 
   const theme = useMemo(() => themeFromDraft(draft), [draft]);
 
@@ -217,6 +228,7 @@ export function CardStudio() {
     setMode("photo");
     setBusy(true);
     setStatus(stylizeLoading());
+    photoBlobRef.current = blob;
 
     // Immediate preview on the card while Gemini runs
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -277,6 +289,79 @@ export function CardStudio() {
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onCaptionSelect(value: string) {
+    if (value === CAPTION_AI_VALUE) {
+      setCaptionSelect(CAPTION_AI_VALUE);
+      if (!photoBlobRef.current) {
+        setStatus({
+          kind: "error",
+          en: "Upload a photo first — AI caption needs the real kid photo.",
+          ko: "먼저 사진을 올려 주세요. AI 캡션은 실제 사진이 필요해요.",
+        });
+        return;
+      }
+      setBusy(true);
+      setStatus({
+        kind: "loading",
+        en: "Writing a caption from your photo…",
+        ko: "사진을 보고 캡션을 쓰는 중…",
+      });
+      try {
+        const form = new FormData();
+        form.append("image", photoBlobRef.current, "caption.jpg");
+        const res = await fetch("/api/caption", { method: "POST", body: form });
+        let json: {
+          caption?: string;
+          reason?: string;
+          error?: string;
+          message?: string;
+          billing?: boolean;
+          httpStatus?: number;
+          errorKind?: string;
+          model?: string;
+        } = {};
+        try {
+          json = (await res.json()) as typeof json;
+        } catch {
+          json = {};
+        }
+        if (json.caption) {
+          patchDraft({ caption: json.caption });
+          setStatus({
+            kind: "ready",
+            en: `AI caption: “${json.caption}”${json.model ? ` · ${json.model}` : ""}`,
+            ko: `AI 캡션: “${json.caption}”`,
+          });
+        } else {
+          setStatus(
+            fromApiFailure({
+              reason: json.reason || json.error || json.message || null,
+              billing: json.billing,
+              httpStatus: json.httpStatus ?? (res.ok ? undefined : res.status),
+              errorKind: json.errorKind,
+              context: "stylize",
+            }),
+          );
+        }
+      } catch (err) {
+        setStatus(
+          fromApiFailure({
+            reason: err instanceof Error ? err.message : null,
+            context: "stylize",
+          }),
+        );
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (isCaptionPreset(value)) {
+      setCaptionSelect(value);
+      patchDraft({ caption: value });
     }
   }
 
@@ -535,12 +620,31 @@ export function CardStudio() {
           </div>
           <label className="block space-y-1 text-sm font-semibold">
             Caption under art
-            <input
-              value={draft.caption}
-              onChange={(e) => patchDraft({ caption: e.target.value })}
-              placeholder="Almost 2 · Cuteness 100%"
-              className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
-            />
+            <select
+              value={
+                captionSelect === CAPTION_AI_VALUE
+                  ? CAPTION_AI_VALUE
+                  : isCaptionPreset(draft.caption)
+                    ? draft.caption
+                    : captionSelect
+              }
+              onChange={(e) => void onCaptionSelect(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2 disabled:opacity-60"
+            >
+              <option value={CAPTION_AI_VALUE}>{CAPTION_AI_LABEL}</option>
+              {CAPTION_PRESETS.map((preset) => (
+                <option key={preset} value={preset}>
+                  {preset}
+                </option>
+              ))}
+            </select>
+            {!isCaptionPreset(draft.caption) &&
+            captionSelect === CAPTION_AI_VALUE ? (
+              <span className="block text-xs font-medium text-black/55">
+                On card: {draft.caption}
+              </span>
+            ) : null}
           </label>
 
           <div className="space-y-2">

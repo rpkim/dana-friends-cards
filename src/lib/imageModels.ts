@@ -26,6 +26,11 @@ export const IMAGE_MODEL_OPTIONS: ImageModelOption[] = [
     label: "Flash 2.5 Image",
     blurb: "gemini-2.5-flash-image",
   },
+  {
+    id: "gemini-3.6-flash",
+    label: "Flash 3.6",
+    blurb: "gemini-3.6-flash · may be text-only",
+  },
 ];
 
 export const DEFAULT_IMAGE_MODEL_ID = IMAGE_MODEL_OPTIONS[0].id;

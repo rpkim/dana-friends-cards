@@ -356,3 +356,79 @@ export async function generateChibiImage(opts: {
     };
   }
 }
+
+const CAPTION_SYSTEM = `You write ONE short trading-card caption for a kid photo.
+Style examples: "Cuteness 100%", "Energy 999", "Snack Attack Ready", "Tiny Legend".
+Rules: playful English, under 40 characters, no quotes, no emoji, no name inventing, no ages unless clearly visible.
+Return ONLY the caption text.`;
+
+export type CaptionResult =
+  | { ok: true; caption: string; model: string }
+  | {
+      ok: false;
+      reason: string;
+      billing?: boolean;
+      httpStatus?: number;
+      errorKind?: GeminiErrorKind;
+    };
+
+/** Text-model caption from the uploaded photo (gemini-2.5-flash by default). */
+export async function generateCaptionFromPhoto(opts: {
+  sourceImage: { base64: string; mediaType: string };
+}): Promise<CaptionResult> {
+  const google = getGeminiClient();
+  if (!google) {
+    return {
+      ok: false,
+      reason:
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY). Add it in .env.local / Vercel env.",
+      errorKind: "other",
+    };
+  }
+
+  const model = styleModelId(); // gemini-2.5-flash
+  try {
+    const result = await generateText({
+      model: google(model),
+      system: CAPTION_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Write one short card caption that fits this kid photo (same playful style as the presets):",
+            },
+            {
+              type: "image",
+              image: `data:${opts.sourceImage.mediaType};base64,${opts.sourceImage.base64}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    const raw = (result.text || "")
+      .trim()
+      .replace(/^["'“”]+|["'“”]+$/g, "")
+      .replace(/\s+/g, " ");
+    const caption = raw.slice(0, 40).trim();
+    if (!caption) {
+      return {
+        ok: false,
+        reason: `${model} returned an empty caption.`,
+        errorKind: "other",
+      };
+    }
+    return { ok: true, caption, model };
+  } catch (err) {
+    const classified = classifySdkError(err);
+    return {
+      ok: false,
+      reason: `[${model}] ${classified.message}`,
+      billing: classified.billing,
+      httpStatus: classified.httpStatus,
+      errorKind: classified.errorKind,
+    };
+  }
+}
