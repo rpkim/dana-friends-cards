@@ -8,10 +8,10 @@ export type PrintPairKind = "dana" | "name";
 type Props = {
   data: CardData;
   /**
-   * Stylized user portrait — on the front art frame and composited into the back.
-   * Same face on Dana & Friends and {name} & Friends pairs.
+   * Unified friends-party illustration (stylized kid among mascots).
+   * Same scene on Dana & Friends and {name} & Friends backs.
    */
-  faceUrl?: string | null;
+  friendsSceneUrl?: string | null;
   /** Card name for the name pair. */
   cardName?: string;
   /** Which 2-up pair to render. */
@@ -23,7 +23,7 @@ type Props = {
  */
 export function PrintSheet({
   data,
-  faceUrl,
+  friendsSceneUrl,
   cardName,
   pair = "dana",
 }: Props) {
@@ -70,7 +70,7 @@ export function PrintSheet({
             theme={data.theme}
             title={backTitle}
             footer={backFooter}
-            faceUrl={faceUrl}
+            sceneUrl={friendsSceneUrl}
           />
         </div>
       </div>

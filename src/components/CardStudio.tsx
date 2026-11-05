@@ -18,6 +18,7 @@ import {
   CAPTION_PRESETS,
   DEFAULT_CAPTION,
   isCaptionPreset,
+  type CaptionPreset,
 } from "@/lib/captions";
 import {
   downloadDataUrl,
@@ -25,16 +26,7 @@ import {
   printDataUrl,
   printNode,
 } from "@/lib/exportCard";
-import {
-  DEFAULT_PARTS,
-  PART_CATEGORIES,
-  STARTER_ART,
-  artPlanFor,
-  fallbackArtFor,
-  partsByCategory,
-  type ArtPlan,
-  type PartsSelection,
-} from "@/lib/parts";
+import { STARTER_ART } from "@/lib/parts";
 import {
   DEFAULT_IMAGE_MODEL_ID,
   IMAGE_MODEL_OPTIONS,
@@ -43,16 +35,12 @@ import {
 } from "@/lib/imageModels";
 import {
   READY_STATUS,
-  composeLoading,
-  composeSuccess,
   fromApiFailure,
   stylizeLoading,
   stylizeSuccess,
   type StatusMsg,
 } from "@/lib/statusCopy";
-import { THEME_LIST } from "@/lib/themes";
-
-type Mode = "photo" | "parts";
+import { THEME_LIST, type PaletteId } from "@/lib/themes";
 
 function readStoredImageModel(): string {
   if (typeof window === "undefined") return DEFAULT_IMAGE_MODEL_ID;
@@ -65,14 +53,37 @@ function readStoredImageModel(): string {
   return DEFAULT_IMAGE_MODEL_ID;
 }
 
+/** HP roll: 30–180 in steps of 10 (no min/max on the HP field). */
+function randomHp(): number {
+  const steps = Math.floor((180 - 30) / 10) + 1;
+  return 30 + Math.floor(Math.random() * steps) * 10;
+}
+
+function randomCaption(): CaptionPreset {
+  return CAPTION_PRESETS[Math.floor(Math.random() * CAPTION_PRESETS.length)]!;
+}
+
+function randomPaletteId(): PaletteId {
+  return THEME_LIST[Math.floor(Math.random() * THEME_LIST.length)]!.id;
+}
+
+export type RandomTrio = {
+  hp: number;
+  caption: CaptionPreset;
+  paletteId: PaletteId;
+};
+
+export function rollRandomTrio(): RandomTrio {
+  return {
+    hp: randomHp(),
+    caption: randomCaption(),
+    paletteId: randomPaletteId(),
+  };
+}
+
 export function CardStudio() {
-  const [mode, setMode] = useState<Mode>("photo");
   const [draft, setDraft] = useState<CardDraft>(() => draftFromPalette("electric"));
-  const [parts, setParts] = useState<PartsSelection>(DEFAULT_PARTS);
   const [artUrl, setArtUrl] = useState(STARTER_ART);
-  const [artPlan, setArtPlan] = useState<ArtPlan | null>(() =>
-    artPlanFor(DEFAULT_PARTS),
-  );
   const [exampleRef, setExampleRef] = useState("/examples/dana.webp");
   const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL_ID);
   const [busy, setBusy] = useState(false);
@@ -82,30 +93,30 @@ export function CardStudio() {
   const [showExamples, setShowExamples] = useState(false);
   /** Gemini A4 sheet (front + Dana & Friends back). Never cropped into art frame. */
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
-  /** Separate "{name} & Friends" back image. */
-  const [nameBackUrl, setNameBackUrl] = useState<string | null>(null);
-  /** Stylized portrait for the live front art frame (and composed backs). */
+  /** Unified friends-party scene (kid among mascots) shared by BOTH backs. */
+  const [friendsSceneUrl, setFriendsSceneUrl] = useState<string | null>(null);
+  /** Stylized portrait for the live front art frame. */
   const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
-  /** Which back is emphasized in the small preview. */
   const [backPreview, setBackPreview] = useState<"dana" | "name">("dana");
-  /** Which 2-up print pair is focused (Dana pair vs name pair). */
   const [printPair, setPrintPair] = useState<PrintPairKind>("dana");
-  /** Studio print view: both sheets stacked, or one pair at a time. */
   const [printView, setPrintView] = useState<"both" | "switch">("both");
-  /** Select value: a preset label, or CAPTION_AI_VALUE while AI is chosen. */
   const [captionSelect, setCaptionSelect] = useState<string>(DEFAULT_CAPTION);
+  /** Random HP + caption preset + chrome palette on generate / when toggled on. */
+  const [randomTrio, setRandomTrio] = useState(false);
 
   useEffect(() => {
     setImageModel(readStoredImageModel());
   }, []);
 
-  // Demo / QA: ?face=/art/demo/jay-blue-portrait.jpg&name=Jay&palette=aura
+  // Demo / QA: ?face=...&scene=...&name=Jay&palette=aura&random=1
   useEffect(() => {
     if (typeof window === "undefined") return;
     const q = new URLSearchParams(window.location.search);
     const face = q.get("face");
+    const scene = q.get("scene");
     const name = q.get("name");
     const palette = q.get("palette");
+    const wantRandom = q.get("random") === "1";
     const draftPatch: Partial<CardDraft> = {};
     if (name) draftPatch.name = name;
     if (
@@ -122,9 +133,18 @@ export function CardStudio() {
     if (face) {
       setPortraitUrl(face);
       setArtUrl(face);
-      setArtPlan(null);
       setShowPrint(true);
     }
+    if (scene) {
+      setFriendsSceneUrl(scene);
+      setShowPrint(true);
+    }
+    if (wantRandom) {
+      const roll = rollRandomTrio();
+      applyRandomTrio(roll);
+      setRandomTrio(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -139,10 +159,8 @@ export function CardStudio() {
   const printRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  /** Gallery / Files only — never set `capture` (iOS would force camera). */
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
-  /** Last uploaded / captured photo — required for AI caption. */
   const photoBlobRef = useRef<Blob | null>(null);
 
   const theme = useMemo(() => themeFromDraft(draft), [draft]);
@@ -152,35 +170,11 @@ export function CardStudio() {
       theme,
       artUrl,
       artBusy: busy,
-      artPlan: mode === "parts" ? artPlan : null,
       customName: draft.name || undefined,
       customHp: draft.hp,
     }),
-    [theme, artUrl, artPlan, busy, mode, draft.name, draft.hp],
+    [theme, artUrl, busy, draft.name, draft.hp],
   );
-
-  function applyPartsSelection(
-    patch: Partial<PartsSelection> | ((prev: PartsSelection) => PartsSelection),
-  ) {
-    setParts((prev) => {
-      const next =
-        typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
-      // Defer chrome sync so rapid chip clicks compose via functional updates
-      // instead of clobbering each other with a stale `parts` closure.
-      queueMicrotask(() => {
-        const plan = artPlanFor(next);
-        setMode("parts");
-        setArtUrl(plan.artUrl);
-        setArtPlan(plan);
-        setStatus({
-          kind: "ready",
-          en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory1}${plan.labels.accessory2 !== "None" ? ` + ${plan.labels.accessory2}` : ""} · ${plan.labels.backdrop}`,
-          ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory1}${plan.labels.accessory2 !== "None" ? ` + ${plan.labels.accessory2}` : ""} · ${plan.labels.backdrop}`,
-        });
-      });
-      return next;
-    });
-  }
 
   useEffect(() => () => stopCamera(), []);
 
@@ -194,21 +188,39 @@ export function CardStudio() {
     setDraft((d) => ({ ...d, ...patch }));
   }
 
+  function applyRandomTrio(roll: RandomTrio) {
+    const t = THEME_LIST.find((x) => x.id === roll.paletteId);
+    setCaptionSelect(roll.caption);
+    setDraft((d) => ({
+      ...d,
+      hp: roll.hp,
+      caption: roll.caption,
+      paletteId: roll.paletteId,
+      typeLabel: d.typeLabel || `${(t?.label || "Friend").split(" ")[0]} Type`,
+    }));
+  }
+
+  function onToggleRandomTrio(on: boolean) {
+    setRandomTrio(on);
+    if (on) applyRandomTrio(rollRandomTrio());
+  }
+
   function applyExample(ex: (typeof EXAMPLE_CARDS)[number]) {
     const next = draftFromPalette(ex.paletteId);
     if ("typeHint" in ex && ex.typeHint) next.typeLabel = ex.typeHint;
-    // Keep name blank so user fills their own — examples are inspiration only
     next.name = draft.name;
     setDraft(next);
+    setCaptionSelect(
+      isCaptionPreset(next.caption) ? next.caption : DEFAULT_CAPTION,
+    );
     setExampleRef(ex.src);
     setArtUrl(
       THEME_LIST.find((t) => t.id === ex.paletteId)?.starterArt || STARTER_ART,
     );
-    setArtPlan(null);
     setStatus({
       kind: "ready",
-      en: `Inspired by ${ex.title} chrome/palette. Upload a photo or remix parts for YOUR card.`,
-      ko: `${ex.title} 스타일을 참고합니다. 사진을 올리거나 파츠로 나만의 카드를 만드세요.`,
+      en: `Inspired by ${ex.title} chrome/palette. Upload a photo for YOUR card.`,
+      ko: `${ex.title} 스타일을 참고합니다. 사진을 올려 나만의 카드를 만드세요.`,
     });
   }
 
@@ -225,7 +237,6 @@ export function CardStudio() {
       });
       streamRef.current = stream;
       setCameraOn(true);
-      setMode("photo");
       requestAnimationFrame(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -270,28 +281,41 @@ export function CardStudio() {
   }
 
   async function runStylize(blob: Blob) {
-    setMode("photo");
     setBusy(true);
     setStatus(stylizeLoading());
     photoBlobRef.current = blob;
 
-    // Photo preview only on the card art frame — sheet result is separate.
+    // Roll trio before generate when checkbox is on (use local values — state is async).
+    let paletteId = draft.paletteId;
+    let hp = draft.hp;
+    let caption = draft.caption;
+    let typeLabel = draft.typeLabel;
+    if (randomTrio) {
+      const roll = rollRandomTrio();
+      applyRandomTrio(roll);
+      paletteId = roll.paletteId;
+      hp = roll.hp;
+      caption = roll.caption;
+      const t = THEME_LIST.find((x) => x.id === roll.paletteId);
+      typeLabel =
+        draft.typeLabel || `${(t?.label || "Friend").split(" ")[0]} Type`;
+    }
+
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     const preview = URL.createObjectURL(blob);
     previewUrlRef.current = preview;
     setArtUrl(preview);
-    setArtPlan(null);
 
     try {
       const form = new FormData();
       form.append("image", blob, "capture.jpg");
-      form.append("palette", draft.paletteId);
-      form.append("typeLabel", draft.typeLabel);
+      form.append("palette", paletteId);
+      form.append("typeLabel", typeLabel);
       form.append("exampleRef", exampleRef);
       form.append("imageModel", imageModel);
       form.append("name", draft.name);
-      form.append("hp", String(draft.hp));
-      form.append("caption", draft.caption);
+      form.append("hp", String(hp));
+      form.append("caption", caption);
       form.append("attack1Name", draft.attack1Name);
       form.append("attack1Damage", String(draft.attack1Damage));
       form.append("attack1Text", draft.attack1Text);
@@ -305,6 +329,7 @@ export function CardStudio() {
       let json: {
         image?: string;
         kind?: string;
+        friendsScene?: string;
         nameBack?: string;
         portrait?: string;
         reason?: string;
@@ -315,7 +340,6 @@ export function CardStudio() {
         message?: string;
         error?: string;
         prompt?: string;
-        partial?: { sheet?: boolean; nameBack?: boolean; portrait?: boolean };
       } = {};
       try {
         json = (await res.json()) as typeof json;
@@ -326,30 +350,28 @@ export function CardStudio() {
       if (json.portrait) {
         setPortraitUrl(json.portrait);
         setArtUrl(json.portrait);
-        setArtPlan(null);
         if (previewUrlRef.current) {
           URL.revokeObjectURL(previewUrlRef.current);
           previewUrlRef.current = null;
         }
       }
-      if (json.nameBack) setNameBackUrl(json.nameBack);
+      const scene = json.friendsScene || json.nameBack;
+      if (scene) setFriendsSceneUrl(scene);
       if (json.image) {
-        // Full A4 sheet — show/download as print sheet, never crop into art box.
         setSheetUrl(json.image);
         setShowPrint(true);
         if (json.prompt) {
           console.info("[stylize] prompt:\n" + json.prompt);
         }
         setStatus(stylizeSuccess(json.model));
-      } else if (json.portrait || json.nameBack) {
+      } else if (json.portrait || scene) {
         setShowPrint(true);
         setStatus({
           kind: "success",
-          en: "Partial Gemini result — portrait and/or name back ready; A4 sheet failed.",
-          ko: "일부 결과만 성공 — 초상/이름 뒷면은 준비됨, A4 시트는 실패.",
+          en: "Partial Gemini result — portrait and/or friends scene ready; A4 sheet failed.",
+          ko: "일부 결과만 성공 — 초상/친구 장면은 준비됨, A4 시트는 실패.",
         });
       } else {
-        // Keep photo preview on the card; show exact Gemini failure (402 vs 429 vs other)
         setStatus(
           fromApiFailure({
             reason,
@@ -445,83 +467,15 @@ export function CardStudio() {
     }
   }
 
-  async function composeFromParts(explicit = false) {
-    setMode("parts");
-    setBusy(true);
-    if (explicit) setStatus(composeLoading());
-    try {
-      const res = await fetch("/api/compose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          palette: draft.paletteId,
-          typeLabel: draft.typeLabel,
-          exampleRef,
-          parts,
-          imageModel,
-        }),
-      });
-      let json: {
-        image?: string;
-        reason?: string;
-        billing?: boolean;
-        httpStatus?: number;
-        errorKind?: string;
-        model?: string;
-        message?: string;
-        error?: string;
-      } = {};
-      try {
-        json = (await res.json()) as typeof json;
-      } catch {
-        json = {};
-      }
-      const reason = json.reason || json.message || json.error || null;
-      if (json.image) {
-        setArtUrl(json.image);
-        setArtPlan(null);
-        setStatus(composeSuccess(json.model));
-      } else {
-        const plan = artPlanFor(parts);
-        setArtUrl(plan.artUrl);
-        setArtPlan(plan);
-        const next = fromApiFailure({
-          reason,
-          billing: json.billing,
-          httpStatus: json.httpStatus ?? (res.ok ? undefined : res.status),
-          errorKind: json.errorKind,
-          context: "compose",
-        });
-        const blocking =
-          next.kind === "billing" || next.kind === "quota" || next.kind === "error";
-        setStatus(!explicit && !blocking ? READY_STATUS : next);
-      }
-    } catch (err) {
-      const plan = artPlanFor(parts);
-      setArtUrl(plan.artUrl);
-      setArtPlan(plan);
-      const next = fromApiFailure({
-        reason: err instanceof Error ? err.message : null,
-        context: "compose",
-      });
-      const blocking =
-        next.kind === "billing" || next.kind === "quota" || next.kind === "error";
-      setStatus(!explicit && !blocking ? READY_STATUS : next);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function downloadFront() {
-    if (!frontRef.current) return;
     setBusy(true);
     try {
+      if (!frontRef.current) return;
       await document.fonts.ready.catch(() => undefined);
-      const node = frontRef.current.querySelector(".card-front") as HTMLElement;
-      const url = await nodeToPng(node);
+      const url = await nodeToPng(frontRef.current);
       downloadDataUrl(
         url,
-        `${(draft.name || "friend").toLowerCase()}-card-front.png`,
+        `${(draft.name || "friend").toLowerCase()}-front.png`,
       );
       setStatus({
         kind: "success",
@@ -612,9 +566,9 @@ export function CardStudio() {
             Card Studio
           </h1>
           <p className="max-w-2xl text-sm font-medium text-black/80 md:text-base">
-            Make <strong>any</strong> custom card: photo → Gemini anime/chibi →
-            art frame, or mix parts. Example cards (Dana friends, LOHA snack/night)
-            are the <em>quality bar</em> — not a theme picker.
+            Photo → Gemini anime/chibi → print two pairs (Dana &amp; Friends and
+            your name). Example cards are the <em>quality bar</em> — not a theme
+            picker.
           </p>
         </div>
       </header>
@@ -659,14 +613,14 @@ export function CardStudio() {
                   theme={theme}
                   title="Dana & Friends"
                   footer="Dana’s Special Card • 2026"
-                  faceUrl={portraitUrl}
+                  sceneUrl={friendsSceneUrl}
                 />
               ) : (
                 <CardBack
                   theme={theme}
                   title={`${(draft.name.trim() || "FRIEND")} & Friends`}
                   footer={`${(draft.name.trim() || "FRIEND").toUpperCase()}'S SPECIAL CARD • 2026`}
-                  faceUrl={portraitUrl}
+                  sceneUrl={friendsSceneUrl}
                 />
               )}
             </div>
@@ -700,24 +654,6 @@ export function CardStudio() {
         </section>
 
         <aside className="space-y-4 rounded-3xl border border-black/10 bg-white/85 p-4 shadow-sm backdrop-blur md:p-5">
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-black/5 p-1">
-            <ModeButton
-              active={mode === "photo"}
-              onClick={() => {
-                setMode("photo");
-                setArtPlan(null);
-              }}
-            >
-              1. Photo → Flash
-            </ModeButton>
-            <ModeButton
-              active={mode === "parts"}
-              onClick={() => applyPartsSelection((prev) => prev)}
-            >
-              2. Parts mixer
-            </ModeButton>
-          </div>
-
           <label className="block space-y-1 text-sm font-semibold">
             Card name
             <input
@@ -737,6 +673,7 @@ export function CardStudio() {
                   patchDraft({ hp: Number(e.target.value) || 0 })
                 }
                 className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
+                data-field="hp"
               />
             </label>
             <label className="block space-y-1 text-sm font-semibold">
@@ -762,6 +699,7 @@ export function CardStudio() {
               onChange={(e) => void onCaptionSelect(e.target.value)}
               disabled={busy}
               className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2 disabled:opacity-60"
+              data-field="caption"
             >
               <option value={CAPTION_AI_VALUE}>{CAPTION_AI_LABEL}</option>
               {CAPTION_PRESETS.map((preset) => (
@@ -778,11 +716,33 @@ export function CardStudio() {
             ) : null}
           </label>
 
+          <label
+            className="flex cursor-pointer items-start gap-3 rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-3"
+            data-random-trio="1"
+          >
+            <input
+              type="checkbox"
+              checked={randomTrio}
+              onChange={(e) => onToggleRandomTrio(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-black"
+              data-field="random-trio"
+            />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-bold">
+                Random HP, caption, and palette
+              </span>
+              <span className="block text-[11px] font-medium text-black/55">
+                When on, rolls all three now and again on every photo generate.
+                Caption rolls a preset only (not AI from photo).
+              </span>
+            </span>
+          </label>
+
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-black/50">
               Chrome palette
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2" data-field="palette">
               {THEME_LIST.map((t) => (
                 <button
                   key={t.id}
@@ -794,11 +754,8 @@ export function CardStudio() {
                         draft.typeLabel ||
                         `${t.label.split(" ")[0]} Type`,
                     });
-                    // Keep stylized portrait when we have one (palette-matched
-                    // on regenerate). Don't leave a yellow starter on a blue card.
                     if (!portraitUrl && !photoBlobRef.current) {
                       setArtUrl(t.starterArt || STARTER_ART);
-                      setArtPlan(null);
                     }
                   }}
                   className={`inline-flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1.5 text-xs font-bold ${
@@ -807,6 +764,8 @@ export function CardStudio() {
                       : "border-black/10 opacity-80"
                   }`}
                   style={{ background: t.accentSoft }}
+                  data-palette={t.id}
+                  aria-pressed={draft.paletteId === t.id}
                 >
                   <MotifIcon motif={t.motif} size={12} />
                   {t.label}
@@ -827,20 +786,13 @@ export function CardStudio() {
                     key={opt.id}
                     type="button"
                     onClick={() => setImageModel(opt.id)}
-                    className={`rounded-xl border-2 px-3 py-2 text-left transition ${
+                    className={`rounded-xl border px-3 py-2 text-left ${
                       active
-                        ? "border-black bg-black text-white shadow"
-                        : "border-black/10 bg-white hover:border-black/30"
+                        ? "border-black bg-black text-white"
+                        : "border-black/10 bg-white"
                     }`}
                   >
                     <span className="block text-xs font-bold">{opt.label}</span>
-                    <span
-                      className={`mt-0.5 block font-mono text-[10px] ${
-                        active ? "text-white/75" : "text-black/55"
-                      }`}
-                    >
-                      {opt.id}
-                    </span>
                     <span
                       className={`mt-0.5 block text-[10px] ${
                         active ? "text-white/70" : "text-black/45"
@@ -853,130 +805,84 @@ export function CardStudio() {
               })}
             </div>
             <p className="text-[11px] text-black/55">
-              Used for Photo → Gemini and parts remix. Failures show the real
-              API error for the selected model (no silent substitute).
+              Used for Photo → Gemini. Failures show the real API error for the
+              selected model (no silent substitute).
             </p>
           </div>
 
-          {mode === "photo" ? (
-            <div className="space-y-3">
-              <p className="text-sm text-black/70">
-                Capture or upload → Gemini generates a full A4 print sheet
-                (front left + back right). The sheet is shown/downloaded as-is —
-                not cropped into the art frame.
-              </p>
-              <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
-                {cameraOn ? (
-                  <video
-                    ref={videoRef}
-                    playsInline
-                    muted
-                    className="aspect-square w-full object-cover"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={artUrl}
-                    alt="Art preview"
-                    className="card-art-image aspect-square w-full"
-                  />
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {!cameraOn ? (
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="rounded-xl bg-black px-3 py-2.5 text-sm font-bold text-white"
-                  >
-                    Open camera
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={captureFromVideo}
-                    disabled={busy}
-                    className="rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    Capture &amp; stylize
-                  </button>
-                )}
+          <div className="space-y-3">
+            <p className="text-sm text-black/70">
+              Capture or upload → Gemini stylizes the front portrait and a
+              friends-party back scene (same kid among the mascots). Two print
+              pairs share that scene; only the back title changes.
+            </p>
+            <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
+              {cameraOn ? (
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  className="aspect-square w-full object-cover"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={artUrl}
+                  alt="Art preview"
+                  className="card-art-image aspect-square w-full"
+                />
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {!cameraOn ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    // Separate gallery input with NO capture attribute so
-                    // iOS Safari / Android Chrome open the photo library.
-                    if (galleryInputRef.current) {
-                      galleryInputRef.current.value = "";
-                      galleryInputRef.current.click();
-                    }
-                  }}
-                  disabled={busy}
-                  className="rounded-xl border-2 border-black px-3 py-2.5 text-sm font-bold disabled:opacity-50"
+                  onClick={startCamera}
+                  className="rounded-xl bg-black px-3 py-2.5 text-sm font-bold text-white"
                 >
-                  Upload photo
+                  Open camera
                 </button>
-              </div>
-              {cameraOn && (
+              ) : (
                 <button
                   type="button"
-                  onClick={stopCamera}
-                  className="w-full rounded-xl border border-black/20 px-3 py-2 text-xs font-bold"
+                  onClick={captureFromVideo}
+                  disabled={busy}
+                  className="rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                 >
-                  Close camera
+                  Capture &amp; stylize
                 </button>
               )}
-              {/* Gallery / files only — do NOT add capture here */}
-              <input
-                ref={galleryInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => void onFile(e.target.files?.[0])}
-              />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {PART_CATEGORIES.map((cat) => (
-                <div key={cat.id} className="space-y-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
-                    {cat.label}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {partsByCategory(cat.id).map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() =>
-                          applyPartsSelection({ [cat.id]: opt.id })
-                        }
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
-                          parts[cat.id] === opt.id
-                            ? "border-black bg-black text-white"
-                            : "border-black/15 bg-white"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <p className="text-[11px] text-black/60">
-                Look / Outfit / Accessory 1 + 2 / Backdrop update the art frame
-                immediately (two accessory overlays stack independently).
-                Optional: ask Flash to remix pixels when image quota is available.
-              </p>
               <button
                 type="button"
+                onClick={() => {
+                  if (galleryInputRef.current) {
+                    galleryInputRef.current.value = "";
+                    galleryInputRef.current.click();
+                  }
+                }}
                 disabled={busy}
-                onClick={() => void composeFromParts(true)}
-                className="w-full rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                className="rounded-xl border-2 border-black px-3 py-2.5 text-sm font-bold disabled:opacity-50"
               >
-                Remix with selected image model
+                Upload photo
               </button>
             </div>
-          )}
+            {cameraOn && (
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="w-full rounded-xl border border-black/20 px-3 py-2 text-xs font-bold"
+              >
+                Close camera
+              </button>
+            )}
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => void onFile(e.target.files?.[0])}
+            />
+          </div>
 
           <StatusBanner status={status} />
           {busy && (
@@ -1019,7 +925,6 @@ export function CardStudio() {
         </aside>
       </div>
 
-      {/* Offscreen capture target: both 2-up pairs for download/print */}
       <div
         ref={printRef}
         className="pointer-events-none absolute -left-[9999px] top-0 w-[1100px] space-y-8 bg-white"
@@ -1029,13 +934,13 @@ export function CardStudio() {
         <PrintSheet
           data={data}
           cardName={draft.name}
-          faceUrl={portraitUrl}
+          friendsSceneUrl={friendsSceneUrl}
           pair="dana"
         />
         <PrintSheet
           data={data}
           cardName={draft.name}
-          faceUrl={portraitUrl}
+          friendsSceneUrl={friendsSceneUrl}
           pair="name"
         />
       </div>
@@ -1084,7 +989,7 @@ export function CardStudio() {
           </div>
           <p className="text-xs font-medium text-black/55">
             Two separate 2-up sheets — front | back, #FFFFFF page, dashed fold
-            line only. Same face + palette on both; only the back title changes.
+            line only. Same friends scene on both backs; only the title changes.
           </p>
           {printView === "switch" ? (
             <div className="inline-flex rounded-xl border border-black/10 bg-black/[0.03] p-1">
@@ -1134,7 +1039,7 @@ export function CardStudio() {
               <PrintSheet
                 data={data}
                 cardName={draft.name}
-                faceUrl={portraitUrl}
+                friendsSceneUrl={friendsSceneUrl}
                 pair="dana"
               />
             </div>
@@ -1148,7 +1053,7 @@ export function CardStudio() {
               <PrintSheet
                 data={data}
                 cardName={draft.name}
-                faceUrl={portraitUrl}
+                friendsSceneUrl={friendsSceneUrl}
                 pair="name"
               />
             </div>
@@ -1156,27 +1061,5 @@ export function CardStudio() {
         </div>
       )}
     </div>
-  );
-}
-
-function ModeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
-        active ? "bg-black text-white shadow" : "text-black/70 hover:bg-white"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

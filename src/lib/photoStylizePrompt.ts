@@ -77,6 +77,31 @@ Stylize the person in the provided photo as a single cute anime/chibi trading-ca
 - Simple theme-matching background. No card frame, no text, no letters, no watermark.
 - NEVER output a raw/unedited photograph.`;
 
+/**
+ * Center-box friends scene shared by BOTH backs (Dana & Friends and {name} & Friends).
+ * One illustration: the stylized kid IS the person in the middle of the mascots.
+ */
+export const PHOTO_FRIENDS_SCENE_TEMPLATE = `[TASK]
+Generate ONE square-to-portrait illustration for a trading-card BACK center art box only.
+This is NOT a full card. No card frame, no title text, no "Dana & Friends", no name, no letters, no watermark, no circular inset, no sticker, no photo paste.
+
+[THEME]
+{CHROME_PALETTE_STYLE}
+- The kid wears a cute hoodie matching this theme. Hood/ears/spikes/accents must match the theme colors (no yellow hoodie or yellow hood spikes on a blue theme).
+
+[SUBJECT — ONE UNIFIED ILLUSTRATION]
+- The kid in the MIDDLE of the crowd must be the SAME person as the attached photo (and matching any attached stylized portrait reference): same face, same hair, same smile, recognizable identity.
+- Draw them as a full chibi/anime character standing/celebrating in the scene — head, hair, torso, and theme hoodie as one continuous drawing.
+- Surround them densely with cute original anime mascot friends filling the frame: fluffy bunny, leafy fox, sprinkle donut buddy, smiling cloud pals, and similar friends crowded close (pink/orange/yellow accents on mascots are OK).
+- Magical theme-matching background (stars / sparkles / soft glow) behind the group.
+- Soft cel shading, clean linework, LOHA/Dana-friends polish.
+
+[STRICT — NO COMPOSITES]
+- Do NOT paste a circular face cutout or photo sticker over another character.
+- Do NOT leave a stock girl/boy face underneath or beside the person.
+- Do NOT draw two faces for the central kid. One kid only — the stylized person from the photo.
+- Output only the friends-party illustration.`;
+
 /** Alias kept for existing imports / logging. */
 export const PHOTO_STYLIZE_INSTRUCTION = PHOTO_PRINT_SHEET_TEMPLATE;
 
@@ -214,6 +239,18 @@ export function buildPortraitPrompt(
   const f = resolveFields(fields);
   return fill(
     PHOTO_PORTRAIT_TEMPLATE,
+    "CHROME_PALETTE_STYLE",
+    f.chrome.chromePaletteStyle,
+  );
+}
+
+/** Shared back center art: stylized kid among mascot friends (no frame/title). */
+export function buildFriendsScenePrompt(
+  fields: PhotoPrintSheetFields = {},
+): string {
+  const f = resolveFields(fields);
+  return fill(
+    PHOTO_FRIENDS_SCENE_TEMPLATE,
     "CHROME_PALETTE_STYLE",
     f.chrome.chromePaletteStyle,
   );

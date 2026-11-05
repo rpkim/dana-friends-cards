@@ -16,7 +16,7 @@ export type StatusMsg = {
 
 export const READY_STATUS: StatusMsg = {
   kind: "ready",
-  en: "Ready — baked anime art is showing. Remix parts or tap Regenerate with Gemini.",
+  en: "Ready — upload or capture a photo to stylize with Gemini.",
   ko: "준비됨 — 기본 애니메 아트가 표시 중입니다. 파츠를 바꾸거나 Gemini로 다시 생성하세요.",
 };
 

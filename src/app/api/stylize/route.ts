@@ -1,14 +1,44 @@
+import { readFile } from "fs/promises";
+import path from "path";
 import { generateChibiImage, getGeminiApiKey } from "@/lib/gemini";
+import type { PaletteId } from "@/lib/themes";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 180;
+
+const FRIENDS_REF: Record<PaletteId, string> = {
+  electric: "friends-electric.jpg",
+  autumn: "friends-autumn.jpg",
+  aura: "friends-aura.jpg",
+  sparkle: "friends-sparkle.jpg",
+};
+
+async function loadFriendsReference(palette: string) {
+  const id = (palette in FRIENDS_REF ? palette : "electric") as PaletteId;
+  const file = path.join(
+    process.cwd(),
+    "public",
+    "art",
+    "backs",
+    FRIENDS_REF[id],
+  );
+  try {
+    const buf = await readFile(file);
+    return {
+      base64: buf.toString("base64"),
+      mediaType: "image/jpeg",
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 export async function POST(req: Request) {
   if (!getGeminiApiKey()) {
     return NextResponse.json({
       fallback: true,
       reason:
-        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Parts/print still work with preview art.",
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Print chrome still works with preview art.",
     });
   }
 
@@ -59,6 +89,7 @@ export async function POST(req: Request) {
       resistance,
       retreat,
     };
+    const friendsRef = await loadFriendsReference(palette);
     const common = {
       theme: palette,
       mode: "photo" as const,
@@ -68,50 +99,54 @@ export async function POST(req: Request) {
       cardFields,
     };
 
-    // Sheet (front + Dana & Friends back), name back, and portrait in parallel.
-    // One failure must not wipe the others.
-    const [sheetR, nameBackR, portraitR] = await Promise.all([
+    // Sheet, unified friends-scene (shared by both backs), and front portrait.
+    const [sheetR, friendsR, portraitR] = await Promise.all([
       generateChibiImage({ ...common, photoKind: "sheet" }),
-      generateChibiImage({ ...common, photoKind: "name-back" }),
+      generateChibiImage({
+        ...common,
+        photoKind: "friends-scene",
+        referenceImage: friendsRef,
+      }),
       generateChibiImage({ ...common, photoKind: "portrait" }),
     ]);
 
-    if (!sheetR.ok && !nameBackR.ok && !portraitR.ok) {
-      const fail = sheetR.ok
-        ? null
-        : sheetR;
+    if (!sheetR.ok && !friendsR.ok && !portraitR.ok) {
+      const fail = !sheetR.ok ? sheetR : !friendsR.ok ? friendsR : portraitR;
       return NextResponse.json({
         fallback: true,
-        reason: fail && !fail.ok ? fail.reason : "All image generations failed",
-        billing: fail && !fail.ok ? fail.billing || false : false,
-        httpStatus: fail && !fail.ok ? fail.httpStatus : undefined,
-        errorKind: fail && !fail.ok ? fail.errorKind : undefined,
+        reason: !fail.ok ? fail.reason : "All image generations failed",
+        billing: !fail.ok ? fail.billing || false : false,
+        httpStatus: !fail.ok ? fail.httpStatus : undefined,
+        errorKind: !fail.ok ? fail.errorKind : undefined,
       });
     }
 
     return NextResponse.json({
       image: sheetR.ok ? sheetR.image : undefined,
       kind: "print-sheet",
-      nameBack: nameBackR.ok ? nameBackR.image : undefined,
+      /** Unified kid-among-mascots scene for BOTH card backs (no face sticker). */
+      friendsScene: friendsR.ok ? friendsR.image : undefined,
+      /** @deprecated alias — same as friendsScene */
+      nameBack: friendsR.ok ? friendsR.image : undefined,
       portrait: portraitR.ok ? portraitR.image : undefined,
       provider: "google-gemini",
       model: sheetR.ok
         ? sheetR.model
         : portraitR.ok
           ? portraitR.model
-          : nameBackR.ok
-            ? nameBackR.model
+          : friendsR.ok
+            ? friendsR.model
             : undefined,
       styleModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       prompt: sheetR.ok ? sheetR.prompt : undefined,
-      nameBackPrompt: nameBackR.ok ? nameBackR.prompt : undefined,
+      friendsScenePrompt: friendsR.ok ? friendsR.prompt : undefined,
       portraitPrompt: portraitR.ok ? portraitR.prompt : undefined,
       partial: {
         sheet: sheetR.ok,
-        nameBack: nameBackR.ok,
+        friendsScene: friendsR.ok,
+        nameBack: friendsR.ok,
         portrait: portraitR.ok,
       },
-      // Surface first failure reason if sheet missing but others ok.
       reason: !sheetR.ok && "reason" in sheetR ? sheetR.reason : undefined,
     });
   } catch (err) {

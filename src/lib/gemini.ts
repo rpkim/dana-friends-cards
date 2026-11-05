@@ -5,6 +5,7 @@ import {
   parseRequestedImageModel,
 } from "@/lib/imageModels";
 import {
+  buildFriendsScenePrompt,
   buildNameFriendsBackPrompt,
   buildPhotoPrintSheetPrompt,
   buildPortraitPrompt,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/photoStylizePrompt";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
 
-export type PhotoGenKind = "sheet" | "name-back" | "portrait";
+export type PhotoGenKind = "sheet" | "name-back" | "portrait" | "friends-scene";
 
 export function getGeminiApiKey(): string | undefined {
   return (
@@ -77,13 +78,16 @@ export async function buildChibiPrompt(input: {
   cardFields?: PhotoPrintSheetFields;
   photoKind?: PhotoGenKind;
 }): Promise<string> {
-  // Photo mode: pick sheet / name-back / portrait template.
+  // Photo mode: pick sheet / name-back / portrait / friends-scene template.
   if (input.mode === "photo") {
     if (input.photoKind === "name-back") {
       return buildNameFriendsBackPrompt(input.cardFields);
     }
     if (input.photoKind === "portrait") {
       return buildPortraitPrompt(input.cardFields);
+    }
+    if (input.photoKind === "friends-scene") {
+      return buildFriendsScenePrompt(input.cardFields);
     }
     return buildPhotoPrintSheetPrompt(input.cardFields);
   }
@@ -275,7 +279,9 @@ export async function generateChibiImage(opts: {
       ? buildNameFriendsBackPrompt(opts.cardFields)
       : photoKind === "portrait"
         ? buildPortraitPrompt(opts.cardFields)
-        : buildPhotoPrintSheetPrompt(opts.cardFields)
+        : photoKind === "friends-scene"
+          ? buildFriendsScenePrompt(opts.cardFields)
+          : buildPhotoPrintSheetPrompt(opts.cardFields)
     : await buildChibiPrompt({
         theme: opts.theme,
         mode: opts.mode,
@@ -287,6 +293,7 @@ export async function generateChibiImage(opts: {
   // Log exact prompt used (never log API keys or image bytes).
   console.info("[gemini] image model:", model);
   console.info("[gemini] mode:", opts.mode);
+  console.info("[gemini] photoKind:", isPhoto ? photoKind : "n/a");
   console.info("[gemini] prompt:\n" + prompt);
 
   const content: Array<
@@ -295,15 +302,28 @@ export async function generateChibiImage(opts: {
   > = [];
 
   if (isPhoto && opts.sourceImage) {
-    // Photo FIRST as image input — identity source of truth for the A4 sheet.
+    // Photo FIRST as image input — identity source of truth.
     content.push({
       type: "text",
-      text: "Attached photo of the person to stylize (identity source — keep this same person on the front card):",
+      text: "Attached photo of the person to stylize (identity source — keep this same person as the central kid):",
     });
     content.push({
       type: "image",
       image: `data:${opts.sourceImage.mediaType};base64,${opts.sourceImage.base64}`,
     });
+    if (opts.referenceImage) {
+      content.push({
+        type: "text",
+        text:
+          photoKind === "friends-scene"
+            ? "Attached friends-scene layout reference: keep the dense mascot crowd energy (bunny, fox, donut, clouds) but REPLACE the central kid with the person from the photo — one unified illustration, no circular face sticker:"
+            : "Match the ART POLISH of this reference (style/quality only — invent original characters; no trademarks):",
+      });
+      content.push({
+        type: "image",
+        image: `data:${opts.referenceImage.mediaType};base64,${opts.referenceImage.base64}`,
+      });
+    }
     content.push({ type: "text", text: prompt });
   } else {
     content.push({ type: "text", text: prompt });

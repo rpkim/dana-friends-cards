@@ -18,7 +18,7 @@ const body = Nunito({
 export const metadata: Metadata = {
   title: "Dana & Friends Card Studio",
   description:
-    "Generate playful Dana & Friends trading-style cards from photos or mix-and-match parts. Download and print with crop marks.",
+    "Generate playful Dana & Friends trading-style cards from photos. Download and print two pairs with crop marks.",
 };
 
 export default function RootLayout({
