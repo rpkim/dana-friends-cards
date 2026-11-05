@@ -82,11 +82,16 @@ export function CardFront({ data, className }: Props) {
       </header>
 
       <div
-        className="relative z-10 mx-0.5 mt-1.5 overflow-hidden rounded-[8px] border-[3.5px]"
+        className="card-art-frame relative z-10 mx-0.5 mt-1.5 shrink-0 overflow-hidden rounded-[8px] border-[3.5px]"
         style={{
           borderColor: theme.accentDeep,
           background: theme.artBg,
-          aspectRatio: "1 / 1.02",
+          /*
+           * Near-square like Dana/LOHA examples. Must use shrink-0 — otherwise the
+           * card flex column crushes this below its aspect-ratio (~1.66 landscape)
+           * and object-cover chops faces mid-nose / chin.
+           */
+          aspectRatio: "1.08 / 1",
         }}
       >
         <CharacterStage artUrl={artUrl} />
@@ -116,7 +121,7 @@ export function CardFront({ data, className }: Props) {
       </div>
 
       <div
-        className="relative z-10 mx-0.5 mt-2 flex flex-1 flex-col justify-center gap-2 rounded-md px-2 py-1.5"
+        className="relative z-10 mx-0.5 mt-1.5 flex min-h-0 flex-1 flex-col justify-center gap-1.5 overflow-hidden rounded-md px-2 py-1"
         style={{ background: theme.panel }}
       >
         {theme.attacks.map((atk, i) => (

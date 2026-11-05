@@ -174,6 +174,8 @@ export function CardStudio() {
         image?: string;
         reason?: string;
         billing?: boolean;
+        httpStatus?: number;
+        errorKind?: string;
         model?: string;
         message?: string;
         error?: string;
@@ -192,12 +194,13 @@ export function CardStudio() {
         }
         setStatus(stylizeSuccess(json.model));
       } else {
-        // Keep photo preview on the card; show actionable error (credits etc.)
+        // Keep photo preview on the card; show exact Gemini failure (402 vs 429 vs other)
         setStatus(
           fromApiFailure({
             reason,
             billing: json.billing,
-            httpStatus: res.status,
+            httpStatus: json.httpStatus ?? (res.ok ? undefined : res.status),
+            errorKind: json.errorKind,
             context: "stylize",
           }),
         );
@@ -233,6 +236,8 @@ export function CardStudio() {
         image?: string;
         reason?: string;
         billing?: boolean;
+        httpStatus?: number;
+        errorKind?: string;
         model?: string;
         message?: string;
         error?: string;
@@ -251,12 +256,13 @@ export function CardStudio() {
         const next = fromApiFailure({
           reason,
           billing: json.billing,
-          httpStatus: res.status,
+          httpStatus: json.httpStatus ?? (res.ok ? undefined : res.status),
+          errorKind: json.errorKind,
           context: "compose",
         });
-        setStatus(
-          !explicit && next.kind !== "billing" ? READY_STATUS : next,
-        );
+        const blocking =
+          next.kind === "billing" || next.kind === "quota" || next.kind === "error";
+        setStatus(!explicit && !blocking ? READY_STATUS : next);
       }
     } catch (err) {
       setArtUrl(fallbackArtFor(parts));
@@ -264,7 +270,9 @@ export function CardStudio() {
         reason: err instanceof Error ? err.message : null,
         context: "compose",
       });
-      setStatus(!explicit && next.kind !== "billing" ? READY_STATUS : next);
+      const blocking =
+        next.kind === "billing" || next.kind === "quota" || next.kind === "error";
+      setStatus(!explicit && !blocking ? READY_STATUS : next);
     } finally {
       setBusy(false);
     }
@@ -513,7 +521,7 @@ export function CardStudio() {
                   <img
                     src={artUrl}
                     alt="Art preview"
-                    className="aspect-square w-full object-cover object-top"
+                    className="card-art-image aspect-square w-full"
                   />
                 )}
               </div>

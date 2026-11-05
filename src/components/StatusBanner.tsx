@@ -4,7 +4,7 @@ import type { StatusMsg } from "@/lib/statusCopy";
 
 export function StatusBanner({ status }: { status: StatusMsg }) {
   const tone =
-    status.kind === "billing"
+    status.kind === "billing" || status.kind === "quota"
       ? "bg-amber-100 text-amber-950 border-amber-300"
       : status.kind === "success" || status.kind === "ready"
         ? "bg-emerald-50 text-emerald-950 border-emerald-200"

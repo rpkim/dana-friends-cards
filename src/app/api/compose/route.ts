@@ -58,6 +58,8 @@ export async function POST(req: Request) {
         fallback: true,
         reason: result.reason,
         billing: result.billing || false,
+        httpStatus: result.httpStatus,
+        errorKind: result.errorKind,
       });
     }
 
