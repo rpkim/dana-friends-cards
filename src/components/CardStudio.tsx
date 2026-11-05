@@ -22,9 +22,11 @@ import {
 } from "@/lib/captions";
 import {
   downloadDataUrl,
+  downloadPdfFromPngs,
   nodeToPng,
   printDataUrl,
-  printNode,
+  printDataUrls,
+  stitchPngsSideBySide,
 } from "@/lib/exportCard";
 import {
   ACCESSORY_OPTIONS,
@@ -163,6 +165,7 @@ export function CardStudio() {
   }, [imageModel]);
 
   const frontRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -476,78 +479,132 @@ export function CardStudio() {
     }
   }
 
-  async function downloadFront() {
-    setBusy(true);
-    try {
-      if (!frontRef.current) return;
-      await document.fonts.ready.catch(() => undefined);
-      const url = await nodeToPng(frontRef.current);
-      downloadDataUrl(
-        url,
-        `${(draft.name || "friend").toLowerCase()}-front.png`,
-      );
-      setStatus({
-        kind: "success",
-        en: "Front card downloaded.",
-      });
-    } catch (err) {
-      setStatus({
-        kind: "error",
-        en: err instanceof Error ? err.message : "Download failed.",
-      });
-    } finally {
-      setBusy(false);
-    }
+  function fileBase() {
+    return (draft.name || "friend").toLowerCase().replace(/[^\w.-]+/g, "-");
   }
 
-  async function downloadSheet() {
-    setShowPrint(true);
+  async function captureFrontPng() {
+    if (!frontRef.current) throw new Error("Front card not ready.");
+    return nodeToPng(frontRef.current);
+  }
+
+  async function captureBackPng() {
+    if (!backRef.current) throw new Error("Back card not ready.");
+    return nodeToPng(backRef.current);
+  }
+
+  async function capturePairPngs(): Promise<string[]> {
+    if (sheetUrl) return [sheetUrl];
+    const [front, back] = await Promise.all([
+      captureFrontPng(),
+      captureBackPng(),
+    ]);
+    return [front, back];
+  }
+
+  async function saveImage(kind: "front" | "back" | "pair") {
     setBusy(true);
     try {
-      if (sheetUrl) {
-        downloadDataUrl(
-          sheetUrl,
-          `${(draft.name || "friend").toLowerCase()}-print-sheet.png`,
-        );
-        setStatus({
-          kind: "success",
-          en: "Gemini A4 print sheet downloaded.",
-        });
+      const base = fileBase();
+      if (kind === "front") {
+        downloadDataUrl(await captureFrontPng(), `${base}-front.png`);
+        setStatus({ kind: "success", en: "Front card image saved." });
         return;
       }
-      await new Promise((r) => setTimeout(r, 100));
-      if (!printRef.current) return;
-      await document.fonts.ready.catch(() => undefined);
-      const url = await nodeToPng(printRef.current);
-      downloadDataUrl(
-        url,
-        `${(draft.name || "friend").toLowerCase()}-print-sheet.png`,
-      );
-      setStatus({
-        kind: "success",
-        en: "Print sheet downloaded.",
-      });
+      if (kind === "back") {
+        downloadDataUrl(await captureBackPng(), `${base}-back.png`);
+        setStatus({ kind: "success", en: "Back card image saved." });
+        return;
+      }
+      if (sheetUrl) {
+        downloadDataUrl(sheetUrl, `${base}-front-back.png`);
+      } else {
+        const [front, back] = await Promise.all([
+          captureFrontPng(),
+          captureBackPng(),
+        ]);
+        downloadDataUrl(
+          await stitchPngsSideBySide(front, back),
+          `${base}-front-back.png`,
+        );
+      }
+      setStatus({ kind: "success", en: "Front + back image saved." });
     } catch (err) {
       setStatus({
         kind: "error",
-        en: err instanceof Error ? err.message : "Download failed.",
+        en: err instanceof Error ? err.message : "Save image failed.",
       });
     } finally {
       setBusy(false);
     }
   }
 
-  async function handlePrint() {
-    setShowPrint(true);
+  async function savePdf(kind: "front" | "back" | "pair") {
     setBusy(true);
     try {
+      const base = fileBase();
+      if (kind === "front") {
+        await downloadPdfFromPngs(
+          [await captureFrontPng()],
+          `${base}-front.pdf`,
+          { layout: "portrait" },
+        );
+        setStatus({ kind: "success", en: "Front card PDF saved." });
+        return;
+      }
+      if (kind === "back") {
+        await downloadPdfFromPngs(
+          [await captureBackPng()],
+          `${base}-back.pdf`,
+          { layout: "portrait" },
+        );
+        setStatus({ kind: "success", en: "Back card PDF saved." });
+        return;
+      }
+      const pngs = await capturePairPngs();
+      await downloadPdfFromPngs(pngs, `${base}-front-back.pdf`, {
+        layout: "landscape",
+      });
+      setStatus({ kind: "success", en: "Front + back PDF saved." });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        en: err instanceof Error ? err.message : "Save PDF failed.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePrint(kind: "front" | "back" | "pair") {
+    setBusy(true);
+    try {
+      if (kind === "front") {
+        await printDataUrls([await captureFrontPng()], {
+          title: "Print front",
+          landscape: false,
+        });
+        setStatus({ kind: "success", en: "Print dialog opened (front)." });
+        return;
+      }
+      if (kind === "back") {
+        await printDataUrls([await captureBackPng()], {
+          title: "Print back",
+          landscape: false,
+        });
+        setStatus({ kind: "success", en: "Print dialog opened (back)." });
+        return;
+      }
       if (sheetUrl) {
         await printDataUrl(sheetUrl);
-        return;
+      } else {
+        const pngs = await capturePairPngs();
+        await printDataUrls(pngs, {
+          title: "Print front + back",
+          landscape: true,
+        });
       }
-      await new Promise((r) => setTimeout(r, 100));
-      if (!printRef.current) return;
-      await printNode(printRef.current);
+      setStatus({ kind: "success", en: "Print dialog opened (front + back)." });
     } catch (err) {
       setStatus({
         kind: "error",
@@ -610,7 +667,7 @@ export function CardStudio() {
                 {(draft.name.trim() || "FRIEND") + " & Friends"}
               </button>
             </div>
-            <div>
+            <div ref={backRef}>
               {backPreview === "dana" ? (
                 <CardBack
                   theme={theme}
@@ -627,31 +684,103 @@ export function CardStudio() {
                 />
               )}
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={downloadFront}
-                className="rounded-xl bg-black px-3 py-3 text-sm font-bold text-white disabled:opacity-50"
-              >
-                Download front
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={downloadSheet}
-                className="rounded-xl border-2 border-black bg-white px-3 py-3 text-sm font-bold disabled:opacity-50"
-              >
-                Download print sheet
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handlePrint}
-                className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-3 py-3 text-sm font-bold disabled:opacity-50"
-              >
-                Print front + back
-              </button>
+
+            <div className="space-y-3 rounded-2xl border border-black/10 bg-white/80 p-3">
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
+                  Save image
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveImage("front")}
+                    className="rounded-xl bg-black px-2 py-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveImage("back")}
+                    className="rounded-xl bg-black px-2 py-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveImage("pair")}
+                    className="rounded-xl bg-black px-2 py-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                  >
+                    Front + Back
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
+                  Print
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handlePrint("front")}
+                    className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handlePrint("back")}
+                    className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handlePrint("pair")}
+                    className="rounded-xl border-2 border-black/20 bg-[#FFF4A8] px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front + Back
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
+                  Save PDF
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePdf("front")}
+                    className="rounded-xl border-2 border-black bg-white px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePdf("back")}
+                    className="rounded-xl border-2 border-black bg-white px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void savePdf("pair")}
+                    className="rounded-xl border-2 border-black bg-white px-2 py-2.5 text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Front + Back
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
