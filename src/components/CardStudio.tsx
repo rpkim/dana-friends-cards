@@ -611,6 +611,12 @@ export function CardStudio() {
           <h1 className="font-display text-4xl font-bold leading-none tracking-tight md:text-6xl">
             Card Studio
           </h1>
+          <p
+            className="inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#FFE56A]"
+            data-studio-build="271d2d6-attacks"
+          >
+            Build 271d2d6 · Attack 1 / Attack 2 menus
+          </p>
           <p className="max-w-2xl text-sm font-medium text-black/80 md:text-base">
             Photo → Gemini anime/chibi → print two pairs (Dana &amp; Friends and
             your name). Example cards are the <em>quality bar</em> — not a theme
