@@ -18,7 +18,6 @@ export function StatusBanner({ status }: { status: StatusMsg }) {
       className={`rounded-xl border px-3 py-2 text-xs font-medium ${tone}`}
     >
       <p>{status.en}</p>
-      <p className="mt-0.5 opacity-80">{status.ko}</p>
       {status.href && (
         <a
           href={status.href}

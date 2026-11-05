@@ -81,7 +81,6 @@ export function CardStudio() {
     setStatus({
       kind: "ready",
       en: `Parts applied: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
-      ko: `파츠 적용: ${plan.labels.look} · ${plan.labels.outfit} · ${plan.labels.accessory} · ${plan.labels.backdrop}`,
     });
   }
 
@@ -111,7 +110,6 @@ export function CardStudio() {
     setStatus({
       kind: "ready",
       en: `Inspired by ${ex.title} chrome/palette. Upload a photo or remix parts for YOUR card.`,
-      ko: `${ex.title} 스타일을 참고합니다. 사진을 올리거나 파츠로 나만의 카드를 만드세요.`,
     });
   }
 
@@ -139,7 +137,6 @@ export function CardStudio() {
       setStatus({
         kind: "error",
         en: "Camera permission blocked — upload a photo instead.",
-        ko: "카메라 권한이 거부되었습니다. 사진을 업로드하세요.",
       });
     }
   }
@@ -318,13 +315,11 @@ export function CardStudio() {
       setStatus({
         kind: "success",
         en: "Front card downloaded.",
-        ko: "카드 앞면을 다운로드했습니다.",
       });
     } catch (err) {
       setStatus({
         kind: "error",
         en: err instanceof Error ? err.message : "Download failed.",
-        ko: "다운로드에 실패했습니다.",
       });
     } finally {
       setBusy(false);
@@ -333,6 +328,10 @@ export function CardStudio() {
 
   async function downloadSheet() {
     setShowPrint(true);
+    setStatus({
+      kind: "loading",
+      en: "Creating A4 print sheet (front + back)…",
+    });
     await new Promise((r) => setTimeout(r, 100));
     if (!printRef.current) return;
     setBusy(true);
@@ -346,13 +345,11 @@ export function CardStudio() {
       setStatus({
         kind: "success",
         en: "Print sheet downloaded.",
-        ko: "인쇄 시트를 다운로드했습니다.",
       });
     } catch (err) {
       setStatus({
         kind: "error",
         en: err instanceof Error ? err.message : "Download failed.",
-        ko: "다운로드에 실패했습니다.",
       });
     } finally {
       setBusy(false);
@@ -361,16 +358,23 @@ export function CardStudio() {
 
   async function handlePrint() {
     setShowPrint(true);
+    setStatus({
+      kind: "loading",
+      en: "Creating A4 print sheet (front + back)…",
+    });
     await new Promise((r) => setTimeout(r, 100));
     if (!printRef.current) return;
     setBusy(true);
     try {
       await printNode(printRef.current);
+      setStatus({
+        kind: "success",
+        en: "Print dialog opened.",
+      });
     } catch (err) {
       setStatus({
         kind: "error",
-        en: err instanceof Error ? err.message : "Print failed.",
-        ko: "인쇄에 실패했습니다. 팝업을 허용해 주세요.",
+        en: err instanceof Error ? err.message : "Print failed. Allow pop-ups and retry.",
       });
     } finally {
       setBusy(false);
@@ -645,7 +649,7 @@ export function CardStudio() {
           <StatusBanner status={status} />
           {busy && (
             <p className="animate-pulse text-xs font-bold text-[#2F6BFF]">
-              Working… / 작업 중…
+              Working…
             </p>
           )}
 

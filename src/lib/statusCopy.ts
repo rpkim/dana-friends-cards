@@ -9,7 +9,6 @@ export type StatusKind =
 export type StatusMsg = {
   kind: StatusKind;
   en: string;
-  ko: string;
   href?: string;
   hrefLabel?: string;
 };
@@ -17,7 +16,6 @@ export type StatusMsg = {
 export const READY_STATUS: StatusMsg = {
   kind: "ready",
   en: "Ready — baked anime art is showing. Remix parts or tap Regenerate with Gemini.",
-  ko: "준비됨 — 기본 애니메 아트가 표시 중입니다. 파츠를 바꾸거나 Gemini로 다시 생성하세요.",
 };
 
 /** Only for a literal HTTP 402 from Gemini Prepay. */
@@ -25,7 +23,6 @@ export function billingStatus(): StatusMsg {
   return {
     kind: "billing",
     en: "Gemini returned HTTP 402 — Prepay credits are depleted on this API key’s AI Studio project. Top up Prepay there, then retry.",
-    ko: "Gemini가 HTTP 402를 반환했습니다 — 이 API 키의 AI Studio 프로젝트 Prepay 크레딧이 소진되었습니다. 해당 프로젝트에서 충전한 뒤 다시 시도하세요.",
     href: "https://ai.studio/projects",
     hrefLabel: "Open AI Studio →",
   };
@@ -36,7 +33,6 @@ export function freeTierImageQuotaStatus(): StatusMsg {
   return {
     kind: "quota",
     en: "Image model quota is 0 on this API project (free tier). Enable billing / image generation for this key’s Google AI Studio project.",
-    ko: "이 API 프로젝트의 이미지 모델 할당량이 0입니다(무료 티어). 이 키가 속한 Google AI Studio 프로젝트에서 결제/이미지 생성을 활성화하세요.",
     href: "https://ai.studio/projects",
     hrefLabel: "Open AI Studio →",
   };
@@ -47,7 +43,6 @@ export function rateLimitStatus(detail?: string): StatusMsg {
   return {
     kind: "quota",
     en: `Gemini rate/quota limit (HTTP 429).${extra} Wait and retry — this is not HTTP 402 empty credits.`,
-    ko: `Gemini 요청/할당량 한도입니다 (HTTP 429). 잠시 후 다시 시도하세요 — 크레딧 소진(402)이 아닙니다.`,
     href: "https://ai.dev/rate-limit",
     hrefLabel: "Check rate limits →",
   };
@@ -57,7 +52,6 @@ export function stylizeLoading(): StatusMsg {
   return {
     kind: "loading",
     en: "Sending photo to Gemini for anime/chibi stylization…",
-    ko: "사진을 Gemini로 보내 애니메/치비 스타일 변환 중…",
   };
 }
 
@@ -65,7 +59,6 @@ export function composeLoading(): StatusMsg {
   return {
     kind: "loading",
     en: "Asking Gemini for anime/chibi art…",
-    ko: "Gemini로 애니메/치비 아트 생성 중…",
   };
 }
 
@@ -73,7 +66,6 @@ export function stylizeSuccess(model?: string): StatusMsg {
   return {
     kind: "success",
     en: `Photo stylized and applied to the card${model ? ` (${model})` : ""}.`,
-    ko: `사진이 변환되어 카드 아트에 적용되었습니다${model ? ` (${model})` : ""}.`,
   };
 }
 
@@ -81,7 +73,6 @@ export function composeSuccess(model?: string): StatusMsg {
   return {
     kind: "success",
     en: `Gemini art ready and applied${model ? ` (${model})` : ""}.`,
-    ko: `Gemini 아트가 카드에 적용되었습니다${model ? ` (${model})` : ""}.`,
   };
 }
 
@@ -126,7 +117,6 @@ export function classifyGeminiFailure(input: {
       /free_tier|limit:\s*0|image|gemini-.*-image|argon|imagen/i.test(raw) ||
       status === 429
     ) {
-      // Prefer the clear free-tier image message when image/argon/quota-0 is involved
       if (
         /free_tier|limit:\s*0|image|gemini-.*-image|argon|imagen/i.test(raw) ||
         /image generation quota is 0/i.test(raw)
@@ -140,8 +130,6 @@ export function classifyGeminiFailure(input: {
   // Literal 402 only
   if (status === 402) return "prepay_402";
 
-  // Legacy server string that explicitly says prepayment depleted AND mentions 402,
-  // or the exact Google 402 body — but NOT if we already know it's 429.
   if (
     status !== 429 &&
     (/prepayment credits are depleted/i.test(raw) ||
@@ -150,7 +138,6 @@ export function classifyGeminiFailure(input: {
     return "prepay_402";
   }
 
-  // Do NOT trust billing:true alone — older API routes set it for any RESOURCE_EXHAUSTED
   if (input.billing === true && status === 402) return "prepay_402";
 
   if (
@@ -168,7 +155,7 @@ export function classifyGeminiFailure(input: {
   return "other";
 }
 
-/** Map API/SDK noise into bilingual UI copy — never raw "Not Found", never false 402. */
+/** Map API/SDK noise into English UI copy — never raw "Not Found", never false 402. */
 export function fromApiFailure(input: {
   reason?: string | null;
   billing?: boolean;
@@ -190,12 +177,10 @@ export function fromApiFailure(input: {
       ? {
           kind: "error",
           en: "Gemini image model unavailable for this key right now. Your photo stays on the card — check model access, then retry.",
-          ko: "이 키로는 지금 Gemini 이미지 모델을 쓸 수 없습니다. 사진은 카드에 유지됩니다. 모델 권한을 확인한 뒤 다시 시도하세요.",
         }
       : {
           kind: "error",
           en: "Live Gemini remix unavailable — showing baked anime art. You can still mix parts and print.",
-          ko: "실시간 Gemini 리믹스를 사용할 수 없어 기본 아트를 표시합니다. 파츠 조합과 인쇄는 가능합니다.",
         };
   }
 
@@ -203,7 +188,6 @@ export function fromApiFailure(input: {
     return {
       kind: "error",
       en: "Gemini is temporarily unavailable (high demand). Retry in a minute.",
-      ko: "Gemini가 일시적으로 혼잡합니다. 잠시 후 다시 시도하세요.",
     };
   }
 
@@ -212,7 +196,6 @@ export function fromApiFailure(input: {
       ? {
           kind: "error",
           en: "Stylize failed. Photo preview stays on the card — retry or check AI Studio model access.",
-          ko: "변환에 실패했습니다. 사진 미리보기는 카드에 유지됩니다. 다시 시도하거나 AI Studio 모델 권한을 확인하세요.",
         }
       : READY_STATUS;
   }
@@ -220,6 +203,5 @@ export function fromApiFailure(input: {
   return {
     kind: "error",
     en: `${statusLabel ? statusLabel + ": " : ""}${raw.slice(0, 160)}${raw.length > 160 ? "…" : ""}`,
-    ko: "요청 처리 중 오류가 발생했습니다. 기본/미리보기 아트를 유지합니다.",
   };
 }

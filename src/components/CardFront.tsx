@@ -102,9 +102,6 @@ export function CardFront({ data, className }: Props) {
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45 px-3 text-center">
             <p className="rounded-xl bg-white/95 px-3 py-2 text-[11px] font-extrabold text-black shadow">
               Gemini stylizing…
-              <span className="mt-0.5 block text-[10px] font-semibold opacity-70">
-                변환 중…
-              </span>
             </p>
           </div>
         )}
