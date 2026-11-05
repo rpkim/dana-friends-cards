@@ -85,7 +85,8 @@ export function CardStudio() {
   const printRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  /** Gallery / Files only — never set `capture` (iOS would force camera). */
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
 
   const theme = useMemo(() => themeFromDraft(draft), [draft]);
@@ -660,7 +661,14 @@ export function CardStudio() {
                 )}
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => {
+                    // Separate gallery input with NO capture attribute so
+                    // iOS Safari / Android Chrome open the photo library.
+                    if (galleryInputRef.current) {
+                      galleryInputRef.current.value = "";
+                      galleryInputRef.current.click();
+                    }
+                  }}
                   disabled={busy}
                   className="rounded-xl border-2 border-black px-3 py-2.5 text-sm font-bold disabled:opacity-50"
                 >
@@ -676,11 +684,11 @@ export function CardStudio() {
                   Close camera
                 </button>
               )}
+              {/* Gallery / files only — do NOT add capture here */}
               <input
-                ref={fileRef}
+                ref={galleryInputRef}
                 type="file"
                 accept="image/*"
-                capture="user"
                 className="hidden"
                 onChange={(e) => void onFile(e.target.files?.[0])}
               />

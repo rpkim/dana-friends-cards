@@ -21,8 +21,8 @@ type Props = {
 };
 
 /**
- * Card chrome modeled on the example set (Dana friends + LOHA snack/night):
- * outlined display name, type pill, art frame, Attack 1/2 pills, themed stats.
+ * Card chrome: outlined name, type pill, face-safe art frame, skill box
+ * (energy-cost circles — not Attack 1/2 pills), stats, flavor.
  */
 export function CardFront({ data, className }: Props) {
   const { theme, artUrl, artPlan } = data;
@@ -90,11 +90,11 @@ export function CardFront({ data, className }: Props) {
           borderColor: theme.accentDeep,
           background: theme.artBg,
           /*
-           * Near-square like Dana/LOHA examples. Must use shrink-0 — otherwise the
-           * card flex column crushes this below its aspect-ratio (~1.66 landscape)
-           * and object-cover chops faces mid-nose / chin.
+           * Face-safe only: shrink-0 so flex cannot crush the window into a
+           * landscape crop. Keep near-square so the skill box still has room.
+           * Cropping bias lives on `.card-art-image` (object-position).
            */
-          aspectRatio: "1.08 / 1",
+          aspectRatio: "1 / 1.02",
         }}
       >
         <CharacterStage artUrl={artUrl} artPlan={artPlan} />
@@ -123,30 +123,31 @@ export function CardFront({ data, className }: Props) {
         </span>
       </div>
 
+      {/* Skill box — restored pre-crush layout (cost circles, not Attack pills). */}
       <div
-        className="relative z-10 mx-0.5 mt-1.5 flex min-h-0 flex-1 flex-col justify-center gap-1.5 overflow-hidden rounded-md px-2 py-1"
+        className="relative z-10 mx-1 mt-2 flex flex-1 flex-col justify-center gap-1 rounded-md border border-black/5 px-2 py-1.5"
         style={{ background: theme.panel }}
       >
         {theme.attacks.map((atk, i) => (
           <div key={`${atk.name}-${i}`}>
             <div className="flex items-start gap-2">
               <span
-                className="mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white shadow"
-                style={{ background: isDark ? theme.accent : theme.accentDeep }}
+                className="mt-0.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full text-[10px] font-black text-white shadow"
+                style={{ background: theme.accentDeep }}
               >
-                Attack {i + 1}
+                {atk.cost}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span
-                    className="card-attack-name flex-1 text-[14px] leading-tight"
+                    className="flex-1 text-[13px] font-black leading-tight"
                     style={{ color: isDark ? "#fff" : theme.accentDeep }}
                   >
                     {atk.name}
                   </span>
                   <span
-                    className="font-display text-[18px] font-bold tabular-nums"
-                    style={{ color: isDark ? "#A8C4FF" : theme.accentDeep }}
+                    className="text-[17px] font-black tabular-nums"
+                    style={{ color: isDark ? "#fff" : "#111" }}
                   >
                     {atk.damage}
                   </span>
@@ -161,12 +162,10 @@ export function CardFront({ data, className }: Props) {
             </div>
             {i === 0 && (
               <div
-                className="my-1 flex items-center justify-center gap-1.5 opacity-70"
-                style={{ color: isDark ? "#A8C4FF" : theme.accentDeep }}
+                className="my-1 flex items-center justify-center gap-1 text-[8px] opacity-55"
+                style={{ color: isDark ? "#fff" : theme.accentDeep }}
               >
-                <MotifIcon motif={theme.motif} size={9} />
-                <span className="text-[8px]">● ● ●</span>
-                <MotifIcon motif={theme.motif} size={9} />
+                ★ ★ ★ ★ ★
               </div>
             )}
           </div>
@@ -174,12 +173,8 @@ export function CardFront({ data, className }: Props) {
       </div>
 
       <div
-        className="relative z-10 mx-0.5 mt-1.5 grid grid-cols-3 gap-1 rounded-sm border px-1.5 py-1 text-[9px] font-bold"
-        style={{
-          background: isDark ? "#061433" : theme.accentSoft,
-          borderColor: theme.accentDeep,
-          color: isDark ? "#fff" : theme.accentDeep,
-        }}
+        className="relative z-10 mx-1 mt-1.5 grid grid-cols-3 gap-1 rounded-sm px-1.5 py-1 text-[9px] font-bold"
+        style={{ background: theme.accentDeep, color: "#fff" }}
       >
         <div className="flex items-center gap-1">
           <span className="opacity-65">Weak</span>
@@ -198,19 +193,17 @@ export function CardFront({ data, className }: Props) {
       </div>
 
       <p
-        className="relative z-10 mx-0.5 mt-1 rounded-sm px-1.5 py-1 text-[9px] italic leading-snug"
+        className="relative z-10 mx-1 mt-1 rounded-sm px-1.5 py-1 text-[9px] italic leading-snug"
         style={{
-          background: isDark ? theme.accentDeep : theme.accent,
+          background: isDark ? "#061433" : theme.accentSoft,
           color: isDark ? "#dce6ff" : theme.accentDeep,
+          boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06)",
         }}
       >
         “{theme.flavor}”
       </p>
 
-      <footer
-        className="relative z-10 mt-1 px-1 pb-2.5 text-[7.5px] font-semibold tracking-wide"
-        style={{ color: isDark ? "#A8C4FF" : "#333", opacity: 0.85 }}
-      >
+      <footer className="relative z-10 mt-1 px-1.5 pb-2.5 text-[7.5px] font-semibold tracking-wide opacity-80">
         Card No. {theme.cardNo} • Custom Card • © DANA &amp; FRIENDS 2026 • Play
         Set
       </footer>
