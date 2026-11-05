@@ -5,24 +5,21 @@ import path from "path";
 
 export const maxDuration = 60;
 
-/**
- * Photo → anime/chibi via Gemini.
- * Style direction: gemini-4-argon (when available)
- * Pixels: GEMINI_IMAGE_MODEL (default gemini-3-pro-image) — Argon is text/vision only.
- */
 export async function POST(req: Request) {
   if (!getGeminiApiKey()) {
     return NextResponse.json({
       fallback: true,
       reason:
-        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Parts/print still work with baked art.",
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Parts/print still work with preview art.",
     });
   }
 
   try {
     const form = await req.formData();
     const file = form.get("image");
-    const theme = String(form.get("theme") || "dana");
+    const palette = String(form.get("palette") || form.get("theme") || "electric");
+    const typeLabel = String(form.get("typeLabel") || "Custom Type");
+    const exampleRef = String(form.get("exampleRef") || "");
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
@@ -31,28 +28,14 @@ export async function POST(req: Request) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = file.type || "image/jpeg";
 
-    let referenceImage: { base64: string; mediaType: string } | undefined;
-    try {
-      const refPath = path.join(
-        process.cwd(),
-        "public",
-        "art",
-        `${theme}.jpg`,
-      );
-      const ref = await readFile(refPath);
-      referenceImage = {
-        base64: ref.toString("base64"),
-        mediaType: "image/jpeg",
-      };
-    } catch {
-      /* optional */
-    }
+    const referenceImage = await loadReference(exampleRef, palette);
 
     const result = await generateChibiImage({
-      theme,
+      theme: palette,
       mode: "photo",
+      typeLabel,
       extra:
-        "Keep the person recognizable as a cute anime chibi; chest-up TCG portrait.",
+        "Keep the person recognizable as a cute anime chibi; chest-up TCG portrait at LOHA/Dana-friends example polish.",
       sourceImage: {
         base64: bytes.toString("base64"),
         mediaType,
@@ -78,4 +61,32 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "Stylize failed";
     return NextResponse.json({ fallback: true, reason: message });
   }
+}
+
+async function loadReference(
+  exampleRef: string,
+  palette: string,
+): Promise<{ base64: string; mediaType: string } | undefined> {
+  const candidates = [
+    exampleRef,
+    `/examples/${palette === "autumn" ? "loha-snack" : palette === "aura" ? "loha-night" : "dana"}.webp`,
+    `/art/${palette === "electric" ? "dana" : palette === "autumn" ? "thea" : palette === "aura" ? "ritsuki" : "josephine"}.jpg`,
+  ].filter(Boolean);
+
+  for (const ref of candidates) {
+    try {
+      const cleaned = ref.replace(/^\//, "");
+      if (cleaned.includes("..")) continue;
+      const buf = await readFile(path.join(process.cwd(), "public", cleaned));
+      const mediaType = cleaned.endsWith(".webp")
+        ? "image/webp"
+        : cleaned.endsWith(".png")
+          ? "image/png"
+          : "image/jpeg";
+      return { base64: buf.toString("base64"), mediaType };
+    } catch {
+      /* try next */
+    }
+  }
+  return undefined;
 }

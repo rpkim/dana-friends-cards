@@ -2,16 +2,17 @@ import type { Metadata } from "next";
 import { Fredoka, Nunito } from "next/font/google";
 import "./globals.css";
 
+/** Rounded display face used on the first polished chrome (name / attack titles). */
 const display = Fredoka({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["500", "600", "700"],
+  weight: ["600", "700"],
 });
 
 const body = Nunito({
   subsets: ["latin"],
   variable: "--font-body",
-  weight: ["500", "600", "700", "800", "900"],
+  weight: ["600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {

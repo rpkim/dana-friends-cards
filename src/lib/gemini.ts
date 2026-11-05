@@ -1,7 +1,6 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 
-/** Resolve Google API key from either accepted env name. */
 export function getGeminiApiKey(): string | undefined {
   return (
     process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
@@ -16,29 +15,26 @@ export function getGeminiClient() {
   return createGoogleGenerativeAI({ apiKey });
 }
 
-/** Style-direction model (Gemini 4 Argon). Text/vision — not an image emitter. */
 export function styleModelId() {
   return process.env.GEMINI_MODEL || "gemini-4-argon";
 }
 
-/**
- * Pixel model — Argon does not emit images on the Generative Language API.
- * Default: gemini-3-pro-image (override with GEMINI_IMAGE_MODEL).
- */
 export function imageModelId() {
   return process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image";
 }
 
-const STYLE_SYSTEM = `You are the art director for Dana & Friends 2026 trading cards.
-Write a single dense image-generation prompt for polished anime/chibi TCG portrait art.
-Match: big shiny eyes, soft cel shading, cute proportions, themed hoodie/outfit, painted background.
-Rules: ORIGINAL designs only — no Poké Balls, no Nintendo/Pokémon names or trademarks.
-Keep © DANA & FRIENDS 2026 vibe: playful electric / autumn / aura / sparkle themes.
-Return ONLY the prompt text, no markdown.`;
+const STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
+Write ONE dense image-generation prompt for polished anime/chibi TCG portrait art.
+Match the visual BAR of premium custom cards like the LOHA snack/night examples and Dana & Friends samples:
+big shiny eyes, soft cel shading, cute proportions, painted environment backgrounds, clean linework.
+Square composition for a trading-card art window, character centered chest-up (or scene that fits the type).
+ORIGINAL designs only — no Poké Balls, no Nintendo/Pokémon names or trademarks.
+Return ONLY the prompt text.`;
 
 export async function buildChibiPrompt(input: {
   theme: string;
   mode: "photo" | "parts";
+  typeLabel?: string;
   partsSummary?: string;
   extra?: string;
 }): Promise<string> {
@@ -51,11 +47,12 @@ export async function buildChibiPrompt(input: {
       model: google(styleModelId()),
       system: STYLE_SYSTEM,
       prompt: [
-        `Theme: ${input.theme}`,
+        `Chrome/style palette hint: ${input.theme}`,
+        input.typeLabel ? `Card type label: ${input.typeLabel}` : "",
         `Mode: ${input.mode}`,
         input.partsSummary ? `Parts: ${input.partsSummary}` : "",
         input.extra || "",
-        "Square TCG art-frame composition, chest-up character centered.",
+        "Match LOHA/Dana-friends example polish (art quality), invent original character/outfit.",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -70,31 +67,28 @@ export async function buildChibiPrompt(input: {
 function defaultPrompt(input: {
   theme: string;
   mode: "photo" | "parts";
+  typeLabel?: string;
   partsSummary?: string;
   extra?: string;
 }) {
-  return `Polished anime chibi trading-card portrait, Dana & Friends ${input.theme} theme.
+  return `Polished anime chibi trading-card portrait at LOHA/Dana-friends example quality.
+Palette/mood: ${input.theme}. Type: ${input.typeLabel || "custom"}.
 Big shiny eyes, soft cel shading, cute proportions, painted background.
 ${input.partsSummary || ""}
 ${input.extra || ""}
-Original designs only — no Poké Balls, no Nintendo trademarks. Square TCG art frame, character centered.`;
+Original designs only — no Poké Balls, no Nintendo trademarks. Square TCG art frame.`;
 }
 
 export type GeminiImageResult =
   | { ok: true; image: string; model: string; prompt: string }
   | { ok: false; reason: string; billing?: boolean };
 
-/**
- * Generate anime/chibi card art pixels.
- * Uses GEMINI_IMAGE_MODEL (gemini-3-pro-image) because gemini-4-argon is text/vision only.
- * Optionally drafts the prompt with Argon first.
- */
 export async function generateChibiImage(opts: {
   theme: string;
   mode: "photo" | "parts";
+  typeLabel?: string;
   partsSummary?: string;
   extra?: string;
-  /** data URL or raw base64 source photo */
   sourceImage?: { base64: string; mediaType: string };
   referenceImage?: { base64: string; mediaType: string };
 }): Promise<GeminiImageResult> {
@@ -110,6 +104,7 @@ export async function generateChibiImage(opts: {
   const prompt = await buildChibiPrompt({
     theme: opts.theme,
     mode: opts.mode,
+    typeLabel: opts.typeLabel,
     partsSummary: opts.partsSummary,
     extra: opts.extra,
   });
@@ -123,7 +118,7 @@ export async function generateChibiImage(opts: {
   if (opts.referenceImage) {
     content.push({
       type: "text",
-      text: "Match the polish and anime/chibi quality of this card-art reference (style only, invent original outfits/icons):",
+      text: "Match the ART POLISH and chibi quality of this example card illustration (style/quality only — invent original characters; no trademarks):",
     });
     content.push({
       type: "image",
@@ -134,7 +129,7 @@ export async function generateChibiImage(opts: {
   if (opts.sourceImage) {
     content.push({
       type: "text",
-      text: "Stylize this photo into the same anime/chibi card-art look while keeping likeness:",
+      text: "Stylize THIS photo into the same polished anime/chibi card-art look while keeping likeness:",
     });
     content.push({
       type: "image",

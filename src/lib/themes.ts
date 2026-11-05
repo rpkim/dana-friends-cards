@@ -1,4 +1,10 @@
-export type ThemeId = "dana" | "thea" | "ritsuki" | "josephine";
+/**
+ * Style palettes control card chrome colors only.
+ * Dana / Thea / Ritsuki / Josephine example cards are visual REFERENCES —
+ * not product themes. See docs/product-decisions.md.
+ */
+
+export type PaletteId = "electric" | "autumn" | "aura" | "sparkle";
 
 export type Attack = {
   name: string;
@@ -8,8 +14,9 @@ export type Attack = {
 };
 
 export type Theme = {
-  id: ThemeId;
+  id: PaletteId;
   label: string;
+  /** Default display name suggestion only — user can change freely */
   name: string;
   hp: number;
   playType: string;
@@ -30,18 +37,21 @@ export type Theme = {
   resistance: string;
   retreat: number;
   flavor: string;
+  /** Optional Gemini style-reference image (example card polish) */
+  exampleRef?: string;
+  starterArt?: string;
 };
 
-export const THEMES: Record<ThemeId, Theme> = {
-  dana: {
-    id: "dana",
-    label: "Electric Yellow",
-    name: "DANA",
-    hp: 999,
+export const THEMES: Record<PaletteId, Theme> = {
+  electric: {
+    id: "electric",
+    label: "Electric yellow",
+    name: "FRIEND",
+    hp: 100,
     playType: "Play Type • Energy",
-    age: "Age 6",
+    age: "Age —",
     playfulness: "Playfulness 100%",
-    cardNo: "011/018",
+    cardNo: "001/018",
     accent: "#FFD400",
     accentSoft: "#FFF4A8",
     accentDeep: "#1A2B8F",
@@ -56,7 +66,7 @@ export const THEMES: Record<ThemeId, Theme> = {
         name: "Endless Energy",
         damage: 30,
         description:
-          "Dana never runs out of energy! She plays, dances and laughs all day.",
+          "Never runs out of energy — plays, dances and laughs all day.",
         cost: 1,
       },
       {
@@ -71,17 +81,19 @@ export const THEMES: Record<ThemeId, Theme> = {
     resistance: "—",
     retreat: 1,
     flavor:
-      "Powered by endless energy and a heart full of friendship — Dana makes every day feel like a party!",
+      "Powered by endless energy and a heart full of friendship — every day feels like a party!",
+    exampleRef: "/examples/dana.webp",
+    starterArt: "/art/dana.jpg",
   },
-  thea: {
-    id: "thea",
-    label: "Autumn Outdoor",
-    name: "THEA",
+  autumn: {
+    id: "autumn",
+    label: "Autumn outdoor",
+    name: "FRIEND",
     hp: 80,
     playType: "Play Type • Outdoor",
-    age: "Age 6",
+    age: "Age —",
     playfulness: "Playfulness 100%",
-    cardNo: "012/018",
+    cardNo: "002/018",
     accent: "#E8A020",
     accentSoft: "#FFE2B0",
     accentDeep: "#5C2E0A",
@@ -96,14 +108,14 @@ export const THEMES: Record<ThemeId, Theme> = {
         name: "Shades On!",
         damage: 20,
         description:
-          "Thea puts on her pink sunglasses and strikes a pose. Everyone nearby starts smiling.",
+          "Puts on pink sunglasses and strikes a pose. Everyone nearby starts smiling.",
         cost: 1,
       },
       {
         name: "Best Friend Power",
         damage: 60,
         description:
-          "Holding hands with her best friend Dana makes her unstoppable. Double the fun!",
+          "Holding hands with a best friend makes them unstoppable. Double the fun!",
         cost: 2,
       },
     ],
@@ -111,17 +123,19 @@ export const THEMES: Record<ThemeId, Theme> = {
     resistance: "Bolt —",
     retreat: 1,
     flavor:
-      "Dana's best friend and partner in fun — wherever Thea goes, laughter follows!",
+      "Partner in fun — wherever they go, laughter follows!",
+    exampleRef: "/examples/thea.webp",
+    starterArt: "/art/thea.jpg",
   },
-  ritsuki: {
-    id: "ritsuki",
-    label: "Blue Aura",
-    name: "RITSUKI",
-    hp: 777,
+  aura: {
+    id: "aura",
+    label: "Blue aura",
+    name: "FRIEND",
+    hp: 90,
     playType: "Play Type • Aura",
-    age: "Age 6",
+    age: "Age —",
     playfulness: "Playfulness 88%",
-    cardNo: "013/018",
+    cardNo: "003/018",
     accent: "#2F6BFF",
     accentSoft: "#A8C4FF",
     accentDeep: "#061433",
@@ -136,14 +150,14 @@ export const THEMES: Record<ThemeId, Theme> = {
         name: "Cool Stare",
         damage: 30,
         description:
-          "Ritsuki crosses his arms and flashes a side smile. Nobody can tell what he is thinking.",
+          "Crosses arms and flashes a side smile. Nobody can tell what they are thinking.",
         cost: 1,
       },
       {
         name: "Aura Power",
         damage: 60,
         description:
-          "With his best friends beside him, his quiet strength protects the whole party.",
+          "With best friends beside them, quiet strength protects the whole party.",
         cost: 2,
       },
     ],
@@ -151,17 +165,19 @@ export const THEMES: Record<ThemeId, Theme> = {
     resistance: "—",
     retreat: 1,
     flavor:
-      "Calm on the outside, adventure on the inside — Ritsuki is the friend everyone can count on!",
+      "Calm on the outside, adventure on the inside — the friend everyone can count on!",
+    exampleRef: "/examples/ritsuki.webp",
+    starterArt: "/art/ritsuki.jpg",
   },
-  josephine: {
-    id: "josephine",
-    label: "Pink Sparkle",
-    name: "JOSEPHINE",
-    hp: 555,
+  sparkle: {
+    id: "sparkle",
+    label: "Pink sparkle",
+    name: "FRIEND",
+    hp: 85,
     playType: "Play Type • Sparkle",
-    age: "Age 6",
+    age: "Age —",
     playfulness: "Playfulness 100%",
-    cardNo: "014/018",
+    cardNo: "004/018",
     accent: "#FF7AB8",
     accentSoft: "#FFD6EA",
     accentDeep: "#6B1F52",
@@ -191,8 +207,13 @@ export const THEMES: Record<ThemeId, Theme> = {
     resistance: "—",
     retreat: 1,
     flavor:
-      "Soft, sweet and quietly magical — Josephine makes every friend feel special!",
+      "Soft, sweet and quietly magical — makes every friend feel special!",
+    exampleRef: "/examples/josephine.webp",
+    starterArt: "/art/josephine.jpg",
   },
 };
 
 export const THEME_LIST = Object.values(THEMES);
+
+/** @deprecated use PaletteId — kept for gradual rename */
+export type ThemeId = PaletteId;

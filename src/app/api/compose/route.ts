@@ -6,50 +6,50 @@ import path from "path";
 
 export const maxDuration = 60;
 
-/** Mix-and-match parts → Gemini anime/chibi portrait for the art frame. */
 export async function POST(req: Request) {
   if (!getGeminiApiKey()) {
     return NextResponse.json({
       fallback: true,
       reason:
-        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Using baked theme art.",
+        "Missing GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY. Using starter art.",
     });
   }
 
   try {
     const body = (await req.json()) as {
+      palette?: string;
       theme?: string;
+      typeLabel?: string;
+      exampleRef?: string;
       parts?: PartsSelection;
     };
-    const theme = body.theme || "dana";
+    const palette = body.palette || body.theme || "electric";
     const parts = body.parts;
     if (!parts) {
       return NextResponse.json({ error: "Missing parts" }, { status: 400 });
     }
 
     let referenceImage: { base64: string; mediaType: string } | undefined;
-    try {
-      const refPath = path.join(
-        process.cwd(),
-        "public",
-        "art",
-        `${theme}.jpg`,
-      );
-      const ref = await readFile(refPath);
-      referenceImage = {
-        base64: ref.toString("base64"),
-        mediaType: "image/jpeg",
-      };
-    } catch {
-      /* optional */
+    const refPath = (body.exampleRef || "").replace(/^\//, "");
+    if (refPath && !refPath.includes("..")) {
+      try {
+        const buf = await readFile(path.join(process.cwd(), "public", refPath));
+        referenceImage = {
+          base64: buf.toString("base64"),
+          mediaType: refPath.endsWith(".webp") ? "image/webp" : "image/jpeg",
+        };
+      } catch {
+        /* optional */
+      }
     }
 
     const result = await generateChibiImage({
-      theme,
+      theme: palette,
       mode: "parts",
+      typeLabel: body.typeLabel || "Custom Type",
       partsSummary: summarizeParts(parts),
       extra:
-        "Compose one polished anime chibi character from the listed parts. Single character, TCG portrait.",
+        "Compose one polished anime chibi character from the listed parts. Single character, TCG portrait at LOHA/Dana-friends example quality.",
       referenceImage,
     });
 

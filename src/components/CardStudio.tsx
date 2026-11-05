@@ -5,191 +5,94 @@ import { CardBack } from "@/components/CardBack";
 import { CardFront, type CardData } from "@/components/CardFront";
 import { PrintSheet } from "@/components/PrintSheet";
 import { MotifIcon } from "@/components/MotifIcon";
+import { StatusBanner } from "@/components/StatusBanner";
+import {
+  EXAMPLE_CARDS,
+  draftFromPalette,
+  themeFromDraft,
+  type CardDraft,
+} from "@/lib/cardModel";
 import { downloadDataUrl, nodeToPng, printNode } from "@/lib/exportCard";
 import {
   DEFAULT_PARTS,
   PART_CATEGORIES,
-  THEME_ART,
-  THEME_DEFAULT_PARTS,
+  STARTER_ART,
   fallbackArtFor,
   partsByCategory,
   type PartsSelection,
 } from "@/lib/parts";
-import { THEME_LIST, THEMES, type ThemeId } from "@/lib/themes";
+import {
+  READY_STATUS,
+  composeLoading,
+  composeSuccess,
+  fromApiFailure,
+  stylizeLoading,
+  stylizeSuccess,
+  type StatusMsg,
+} from "@/lib/statusCopy";
+import { THEME_LIST } from "@/lib/themes";
 
-type Mode = "parts" | "photo";
-
-const READY_STATUS =
-  "Ready — baked anime art is showing. Remix parts or tap Regenerate with Gemini.";
-
-/** Never surface raw framework/SDK strings like "Not Found" in the UI. */
-function friendlyStatus(input: {
-  reason?: string | null;
-  billing?: boolean;
-  httpStatus?: number;
-  okImage?: boolean;
-  model?: string;
-  context: "compose" | "stylize";
-}): string {
-  if (input.okImage) {
-    return input.context === "stylize"
-      ? `Photo stylized with ${input.model || "Gemini"}.`
-      : `Gemini art ready (${input.model || "image model"}).`;
-  }
-
-  const raw = (input.reason || "").trim();
-  const lower = raw.toLowerCase();
-  const billing =
-    input.billing ||
-    input.httpStatus === 402 ||
-    /402|resource_exhausted|prepayment credits|billing|quota/i.test(raw);
-
-  if (billing) {
-    return "Gemini credits are empty (402). Top up at ai.studio/projects — showing baked anime art for now.";
-  }
-
-  if (
-    input.httpStatus === 404 ||
-    lower === "not found" ||
-    /\b404\b/.test(lower) ||
-    /model .+ not found|not_found/i.test(raw)
-  ) {
-    return input.context === "stylize"
-      ? "Gemini stylize unavailable right now — showing current art. Try again after checking API access."
-      : "Live Gemini remix unavailable — showing baked anime art. You can still mix parts and print.";
-  }
-
-  if (!raw) {
-    return input.context === "stylize"
-      ? "Stylize unavailable — switch to Parts or check Gemini credits."
-      : READY_STATUS;
-  }
-
-  // Soften any other API noise; keep it short and actionable.
-  if (raw.length > 160) {
-    return `${raw.slice(0, 157)}… — showing baked art.`;
-  }
-  if (/showing baked|baked anime|credits/i.test(raw)) return raw;
-  return `${raw} — showing baked anime art.`;
-}
+type Mode = "photo" | "parts";
 
 export function CardStudio() {
-  const [themeId, setThemeId] = useState<ThemeId>("dana");
-  const [mode, setMode] = useState<Mode>("parts");
+  const [mode, setMode] = useState<Mode>("photo");
+  const [draft, setDraft] = useState<CardDraft>(() => draftFromPalette("electric"));
   const [parts, setParts] = useState<PartsSelection>(DEFAULT_PARTS);
-  const [customName, setCustomName] = useState("");
-  const [customHp, setCustomHp] = useState<number | "">("");
-  const [artUrl, setArtUrl] = useState(THEME_ART.dana);
+  const [artUrl, setArtUrl] = useState(STARTER_ART);
+  const [exampleRef, setExampleRef] = useState("/examples/dana.webp");
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(READY_STATUS);
+  const [status, setStatus] = useState<StatusMsg>(READY_STATUS);
   const [showPrint, setShowPrint] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
+  const [showExamples, setShowExamples] = useState(false);
 
   const frontRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const composeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
 
-  const theme = THEMES[themeId];
+  const theme = useMemo(() => themeFromDraft(draft), [draft]);
 
   const data: CardData = useMemo(
     () => ({
       theme,
       artUrl,
-      customName: customName.trim() || undefined,
-      customHp: customHp === "" ? undefined : Number(customHp),
+      artBusy: busy && mode === "photo",
+      customName: draft.name || undefined,
+      customHp: draft.hp,
     }),
-    [theme, artUrl, customName, customHp],
+    [theme, artUrl, busy, mode, draft.name, draft.hp],
   );
 
-  useEffect(() => {
-    const next = THEME_DEFAULT_PARTS[themeId] ?? DEFAULT_PARTS;
-    setParts(next);
-    setArtUrl(THEME_ART[themeId] || THEME_ART.dana);
-    setMode("parts");
-    setStatus(READY_STATUS);
-  }, [themeId]);
+  useEffect(() => () => stopCamera(), []);
 
   useEffect(() => {
-    return () => stopCamera();
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
   }, []);
 
-  // Debounced Gemini compose when parts change
-  useEffect(() => {
-    if (mode !== "parts") return;
-    if (composeTimer.current) clearTimeout(composeTimer.current);
-    composeTimer.current = setTimeout(() => {
-      void composeFromParts(parts, true);
-    }, 450);
-    return () => {
-      if (composeTimer.current) clearTimeout(composeTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parts, mode]);
+  function patchDraft(patch: Partial<CardDraft>) {
+    setDraft((d) => ({ ...d, ...patch }));
+  }
 
-  async function composeFromParts(
-    nextParts: PartsSelection,
-    silentFallback: boolean,
-  ) {
-    setBusy(true);
-    if (!silentFallback) setStatus("Asking Gemini for anime/chibi art…");
-    try {
-      const res = await fetch("/api/compose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: themeId, parts: nextParts }),
-      });
-      let json: {
-        image?: string;
-        fallback?: boolean;
-        reason?: string;
-        billing?: boolean;
-        model?: string;
-        message?: string;
-        error?: string;
-      } = {};
-      try {
-        json = (await res.json()) as typeof json;
-      } catch {
-        json = {};
-      }
-      const reason = json.reason || json.message || json.error || null;
-      if (json.image) {
-        setArtUrl(json.image);
-        setStatus(
-          friendlyStatus({
-            okImage: true,
-            model: json.model,
-            context: "compose",
-          }),
-        );
-      } else {
-        setArtUrl(fallbackArtFor(themeId, nextParts));
-        const next = friendlyStatus({
-          reason,
-          billing: json.billing,
-          httpStatus: res.status,
-          context: "compose",
-        });
-        // Silent auto-remix: keep Ready unless it's a credit/billing issue.
-        const isBilling = /credits are empty|402|top up/i.test(next);
-        setStatus(
-          silentFallback && !isBilling ? READY_STATUS : next,
-        );
-      }
-    } catch (err) {
-      setArtUrl(fallbackArtFor(themeId, nextParts));
-      const next = friendlyStatus({
-        reason: err instanceof Error ? err.message : null,
-        context: "compose",
-      });
-      const isBilling = /credits are empty|402|top up/i.test(next);
-      setStatus(silentFallback && !isBilling ? READY_STATUS : next);
-    } finally {
-      setBusy(false);
-    }
+  function applyExample(ex: (typeof EXAMPLE_CARDS)[number]) {
+    const next = draftFromPalette(ex.paletteId);
+    if ("typeHint" in ex && ex.typeHint) next.typeLabel = ex.typeHint;
+    // Keep name blank so user fills their own — examples are inspiration only
+    next.name = draft.name;
+    setDraft(next);
+    setExampleRef(ex.src);
+    setArtUrl(
+      THEME_LIST.find((t) => t.id === ex.paletteId)?.starterArt || STARTER_ART,
+    );
+    setStatus({
+      kind: "ready",
+      en: `Inspired by ${ex.title} chrome/palette. Upload a photo or remix parts for YOUR card.`,
+      ko: `${ex.title} 스타일을 참고합니다. 사진을 올리거나 파츠로 나만의 카드를 만드세요.`,
+    });
   }
 
   async function startCamera() {
@@ -198,13 +101,14 @@ export function CardStudio() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
-          width: { ideal: 720 },
-          height: { ideal: 720 },
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
         },
         audio: false,
       });
       streamRef.current = stream;
       setCameraOn(true);
+      setMode("photo");
       requestAnimationFrame(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -212,7 +116,11 @@ export function CardStudio() {
         }
       });
     } catch {
-      setStatus("Camera permission blocked — upload a photo instead.");
+      setStatus({
+        kind: "error",
+        en: "Camera permission blocked — upload a photo instead.",
+        ko: "카메라 권한이 거부되었습니다. 사진을 업로드하세요.",
+      });
     }
   }
 
@@ -226,8 +134,8 @@ export function CardStudio() {
     const video = videoRef.current;
     if (!video) return;
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 512;
-    canvas.height = video.videoHeight || 512;
+    canvas.width = video.videoWidth || 720;
+    canvas.height = video.videoHeight || 720;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
@@ -235,8 +143,8 @@ export function CardStudio() {
       canvas.toBlob(res, "image/jpeg", 0.92),
     );
     if (!blob) return;
-    await runStylize(blob);
     stopCamera();
+    await runStylize(blob);
   }
 
   async function onFile(file: File | undefined) {
@@ -245,17 +153,25 @@ export function CardStudio() {
   }
 
   async function runStylize(blob: Blob) {
-    setBusy(true);
     setMode("photo");
-    setStatus("Gemini stylizing photo → anime/chibi…");
+    setBusy(true);
+    setStatus(stylizeLoading());
+
+    // Immediate preview on the card while Gemini runs
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const preview = URL.createObjectURL(blob);
+    previewUrlRef.current = preview;
+    setArtUrl(preview);
+
     try {
       const form = new FormData();
       form.append("image", blob, "capture.jpg");
-      form.append("theme", themeId);
+      form.append("palette", draft.paletteId);
+      form.append("typeLabel", draft.typeLabel);
+      form.append("exampleRef", exampleRef);
       const res = await fetch("/api/stylize", { method: "POST", body: form });
       let json: {
         image?: string;
-        fallback?: boolean;
         reason?: string;
         billing?: boolean;
         model?: string;
@@ -270,16 +186,15 @@ export function CardStudio() {
       const reason = json.reason || json.message || json.error || null;
       if (json.image) {
         setArtUrl(json.image);
-        setStatus(
-          friendlyStatus({
-            okImage: true,
-            model: json.model,
-            context: "stylize",
-          }),
-        );
+        if (previewUrlRef.current) {
+          URL.revokeObjectURL(previewUrlRef.current);
+          previewUrlRef.current = null;
+        }
+        setStatus(stylizeSuccess(json.model));
       } else {
+        // Keep photo preview on the card; show actionable error (credits etc.)
         setStatus(
-          friendlyStatus({
+          fromApiFailure({
             reason,
             billing: json.billing,
             httpStatus: res.status,
@@ -289,7 +204,7 @@ export function CardStudio() {
       }
     } catch (err) {
       setStatus(
-        friendlyStatus({
+        fromApiFailure({
           reason: err instanceof Error ? err.message : null,
           context: "stylize",
         }),
@@ -299,18 +214,84 @@ export function CardStudio() {
     }
   }
 
+  async function composeFromParts(explicit = false) {
+    setMode("parts");
+    setBusy(true);
+    if (explicit) setStatus(composeLoading());
+    try {
+      const res = await fetch("/api/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          palette: draft.paletteId,
+          typeLabel: draft.typeLabel,
+          exampleRef,
+          parts,
+        }),
+      });
+      let json: {
+        image?: string;
+        reason?: string;
+        billing?: boolean;
+        model?: string;
+        message?: string;
+        error?: string;
+      } = {};
+      try {
+        json = (await res.json()) as typeof json;
+      } catch {
+        json = {};
+      }
+      const reason = json.reason || json.message || json.error || null;
+      if (json.image) {
+        setArtUrl(json.image);
+        setStatus(composeSuccess(json.model));
+      } else {
+        setArtUrl(fallbackArtFor(parts));
+        const next = fromApiFailure({
+          reason,
+          billing: json.billing,
+          httpStatus: res.status,
+          context: "compose",
+        });
+        setStatus(
+          !explicit && next.kind !== "billing" ? READY_STATUS : next,
+        );
+      }
+    } catch (err) {
+      setArtUrl(fallbackArtFor(parts));
+      const next = fromApiFailure({
+        reason: err instanceof Error ? err.message : null,
+        context: "compose",
+      });
+      setStatus(!explicit && next.kind !== "billing" ? READY_STATUS : next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function downloadFront() {
     if (!frontRef.current) return;
     setBusy(true);
     try {
-      const node = frontRef.current.querySelector(
-        ".card-front",
-      ) as HTMLElement;
+      await document.fonts.ready.catch(() => undefined);
+      const node = frontRef.current.querySelector(".card-front") as HTMLElement;
       const url = await nodeToPng(node);
       downloadDataUrl(
         url,
-        `${(data.customName || theme.name).toLowerCase()}-card-front.png`,
+        `${(draft.name || "friend").toLowerCase()}-card-front.png`,
       );
+      setStatus({
+        kind: "success",
+        en: "Front card downloaded.",
+        ko: "카드 앞면을 다운로드했습니다.",
+      });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        en: err instanceof Error ? err.message : "Download failed.",
+        ko: "다운로드에 실패했습니다.",
+      });
     } finally {
       setBusy(false);
     }
@@ -318,15 +299,27 @@ export function CardStudio() {
 
   async function downloadSheet() {
     setShowPrint(true);
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 100));
     if (!printRef.current) return;
     setBusy(true);
     try {
+      await document.fonts.ready.catch(() => undefined);
       const url = await nodeToPng(printRef.current);
       downloadDataUrl(
         url,
-        `${(data.customName || theme.name).toLowerCase()}-print-sheet.png`,
+        `${(draft.name || "friend").toLowerCase()}-print-sheet.png`,
       );
+      setStatus({
+        kind: "success",
+        en: "Print sheet downloaded.",
+        ko: "인쇄 시트를 다운로드했습니다.",
+      });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        en: err instanceof Error ? err.message : "Download failed.",
+        ko: "다운로드에 실패했습니다.",
+      });
     } finally {
       setBusy(false);
     }
@@ -334,61 +327,45 @@ export function CardStudio() {
 
   async function handlePrint() {
     setShowPrint(true);
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 100));
     if (!printRef.current) return;
     setBusy(true);
     try {
       await printNode(printRef.current);
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        en: err instanceof Error ? err.message : "Print failed.",
+        ko: "인쇄에 실패했습니다. 팝업을 허용해 주세요.",
+      });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pb-16 pt-6 md:px-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-16 pt-6 md:px-6">
       <header className="relative overflow-hidden rounded-[28px] border border-black/10 bg-[linear-gradient(135deg,#FFE56A_0%,#FF9AC8_45%,#2F6BFF_100%)] p-6 text-black shadow-lg md:p-8">
-        <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/30 blur-2xl" />
         <div className="relative space-y-3">
           <p className="text-xs font-bold uppercase tracking-[0.35em] text-black/70">
             © DANA &amp; FRIENDS 2026
           </p>
-          <h1 className="font-[family-name:var(--font-display)] text-4xl font-black leading-none tracking-tight md:text-6xl">
-            Dana &amp; Friends
-            <span className="mt-2 block text-2xl font-extrabold md:text-3xl">
-              Card Studio
-            </span>
+          <h1 className="font-display text-4xl font-bold leading-none tracking-tight md:text-6xl">
+            Card Studio
           </h1>
-          <p className="max-w-xl text-sm font-medium text-black/80 md:text-base">
-            Gemini anime/chibi art in a TCG-style frame — mix parts or stylize a
-            photo, then download or print front + back with crop marks.
+          <p className="max-w-2xl text-sm font-medium text-black/80 md:text-base">
+            Make <strong>any</strong> custom card: photo → Gemini anime/chibi →
+            art frame, or mix parts. Example cards (Dana friends, LOHA snack/night)
+            are the <em>quality bar</em> — not a theme picker.
           </p>
         </div>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
         <section className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {THEME_LIST.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setThemeId(t.id)}
-                className={`inline-flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-bold transition ${
-                  themeId === t.id
-                    ? "scale-[1.02] border-black shadow-md"
-                    : "border-black/10 opacity-80 hover:opacity-100"
-                }`}
-                style={{ background: t.accentSoft }}
-              >
-                <MotifIcon motif={t.motif} size={14} />
-                {t.name}
-              </button>
-            ))}
-          </div>
-
           <div
             ref={frontRef}
-            className="mx-auto w-full max-w-[400px] transition duration-500 [animation:card-float_4s_ease-in-out_infinite]"
+            className="mx-auto w-full max-w-[400px] [animation:card-float_4s_ease-in-out_infinite]"
           >
             <CardFront data={data} />
           </div>
@@ -396,7 +373,7 @@ export function CardStudio() {
           <div className="mx-auto grid w-full max-w-[400px] grid-cols-2 gap-3">
             <div>
               <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wider text-black/50">
-                Back preview
+                Back
               </p>
               <CardBack theme={theme} />
             </div>
@@ -429,89 +406,99 @@ export function CardStudio() {
           </div>
         </section>
 
-        <aside className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur md:p-5">
+        <aside className="space-y-4 rounded-3xl border border-black/10 bg-white/85 p-4 shadow-sm backdrop-blur md:p-5">
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-black/5 p-1">
+            <ModeButton active={mode === "photo"} onClick={() => setMode("photo")}>
+              1. Photo → Gemini
+            </ModeButton>
             <ModeButton
               active={mode === "parts"}
               onClick={() => {
                 setMode("parts");
-                setArtUrl(fallbackArtFor(themeId, parts));
+                setArtUrl(fallbackArtFor(parts));
               }}
             >
-              Parts mixer
-            </ModeButton>
-            <ModeButton active={mode === "photo"} onClick={() => setMode("photo")}>
-              Photo / camera
+              2. Parts mixer
             </ModeButton>
           </div>
 
           <label className="block space-y-1 text-sm font-semibold">
             Card name
             <input
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              placeholder={theme.name}
+              value={draft.name}
+              onChange={(e) => patchDraft({ name: e.target.value })}
+              placeholder="Your name"
               className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
             />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block space-y-1 text-sm font-semibold">
+              HP
+              <input
+                type="number"
+                value={draft.hp}
+                onChange={(e) =>
+                  patchDraft({ hp: Number(e.target.value) || 0 })
+                }
+                className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
+              />
+            </label>
+            <label className="block space-y-1 text-sm font-semibold">
+              Type label
+              <input
+                value={draft.typeLabel}
+                onChange={(e) => patchDraft({ typeLabel: e.target.value })}
+                placeholder="Snack Type"
+                className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
+              />
+            </label>
+          </div>
           <label className="block space-y-1 text-sm font-semibold">
-            HP
+            Caption under art
             <input
-              type="number"
-              value={customHp}
-              onChange={(e) =>
-                setCustomHp(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              placeholder={String(theme.hp)}
+              value={draft.caption}
+              onChange={(e) => patchDraft({ caption: e.target.value })}
+              placeholder="Almost 2 · Cuteness 100%"
               className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 font-bold outline-none ring-yellow-300 focus:ring-2"
             />
           </label>
 
-          {mode === "parts" ? (
-            <div className="space-y-4">
-              <p className="text-xs text-black/60">
-                Remixes call Gemini (Argon directs style; image model paints the
-                frame). Baked anime art shows instantly if credits are empty.
-              </p>
-              {PART_CATEGORIES.map((cat) => (
-                <div key={cat.id} className="space-y-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
-                    {cat.label}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {partsByCategory(cat.id).map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() =>
-                          setParts((p) => ({ ...p, [cat.id]: opt.id }))
-                        }
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${
-                          parts[cat.id] === opt.id
-                            ? "border-black bg-black text-white"
-                            : "border-black/15 bg-white hover:border-black/40"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+              Chrome palette
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {THEME_LIST.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    patchDraft({
+                      paletteId: t.id,
+                      typeLabel:
+                        draft.typeLabel ||
+                        `${t.label.split(" ")[0]} Type`,
+                    });
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-1.5 text-xs font-bold ${
+                    draft.paletteId === t.id
+                      ? "border-black shadow"
+                      : "border-black/10 opacity-80"
+                  }`}
+                  style={{ background: t.accentSoft }}
+                >
+                  <MotifIcon motif={t.motif} size={12} />
+                  {t.label}
+                </button>
               ))}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void composeFromParts(parts, false)}
-                className="w-full rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-              >
-                Regenerate with Gemini
-              </button>
             </div>
-          ) : (
+          </div>
+
+          {mode === "photo" ? (
             <div className="space-y-3">
               <p className="text-sm text-black/70">
-                Capture or upload — Gemini stylizes into anime/chibi card art
-                matching the theme reference.
+                Capture or upload → Gemini stylizes to anime/chibi and applies it
+                to the art frame (download/print use that result).
               </p>
               <div className="overflow-hidden rounded-2xl border border-black/10 bg-black/90">
                 {cameraOn ? (
@@ -535,7 +522,7 @@ export function CardStudio() {
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="rounded-xl bg-black px-3 py-2 text-sm font-bold text-white"
+                    className="rounded-xl bg-black px-3 py-2.5 text-sm font-bold text-white"
                   >
                     Open camera
                   </button>
@@ -544,7 +531,7 @@ export function CardStudio() {
                     type="button"
                     onClick={captureFromVideo}
                     disabled={busy}
-                    className="rounded-xl bg-[#2F6BFF] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                    className="rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                   >
                     Capture &amp; stylize
                   </button>
@@ -553,7 +540,7 @@ export function CardStudio() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
-                  className="rounded-xl border-2 border-black px-3 py-2 text-sm font-bold disabled:opacity-50"
+                  className="rounded-xl border-2 border-black px-3 py-2.5 text-sm font-bold disabled:opacity-50"
                 >
                   Upload photo
                 </button>
@@ -571,30 +558,89 @@ export function CardStudio() {
                 ref={fileRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
+                capture="user"
                 className="hidden"
                 onChange={(e) => void onFile(e.target.files?.[0])}
               />
             </div>
+          ) : (
+            <div className="space-y-3">
+              {PART_CATEGORIES.map((cat) => (
+                <div key={cat.id} className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-black/50">
+                    {cat.label}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {partsByCategory(cat.id).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          const next = { ...parts, [cat.id]: opt.id };
+                          setParts(next);
+                          setArtUrl(fallbackArtFor(next));
+                        }}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
+                          parts[cat.id] === opt.id
+                            ? "border-black bg-black text-white"
+                            : "border-black/15 bg-white"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void composeFromParts(true)}
+                className="w-full rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              >
+                Regenerate with Gemini
+              </button>
+            </div>
           )}
 
-          <p
-            role="status"
-            className={`rounded-xl px-3 py-2 text-xs font-medium ${
-              /credits are empty|402|top up/i.test(status || "")
-                ? "bg-amber-100 text-amber-950"
-                : /ready —|gemini art ready|photo stylized/i.test(status || "")
-                  ? "bg-emerald-50 text-emerald-950"
-                  : "bg-black/5 text-black/70"
-            }`}
-          >
-            {status || READY_STATUS}
-          </p>
+          <StatusBanner status={status} />
           {busy && (
             <p className="animate-pulse text-xs font-bold text-[#2F6BFF]">
-              Working…
+              Working… / 작업 중…
             </p>
           )}
+
+          <div className="border-t border-black/10 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowExamples((v) => !v)}
+              className="text-xs font-bold underline"
+            >
+              {showExamples ? "Hide" : "Show"} example cards (inspiration only)
+            </button>
+            {showExamples && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {EXAMPLE_CARDS.map((ex) => (
+                  <button
+                    key={ex.id}
+                    type="button"
+                    onClick={() => applyExample(ex)}
+                    className="overflow-hidden rounded-xl border border-black/10 text-left hover:border-black"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={ex.src}
+                      alt={ex.title}
+                      className="aspect-[3/4] w-full object-cover"
+                    />
+                    <span className="block px-1.5 py-1 text-[9px] font-bold leading-tight">
+                      {ex.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </aside>
       </div>
 
@@ -613,9 +659,7 @@ export function CardStudio() {
       {showPrint && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-black">
-              Print sheet
-            </h2>
+            <h2 className="font-display text-2xl font-bold">Print sheet</h2>
             <button
               type="button"
               className="text-sm font-bold underline"

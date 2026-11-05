@@ -1,17 +1,16 @@
-export type PartCategory = "base" | "outfit" | "accessory" | "backdrop";
+export type PartCategory = "look" | "outfit" | "accessory" | "backdrop";
 
 export type PartOption = {
   id: string;
   label: string;
   category: PartCategory;
-  /** Prompt fragment sent to Gemini when regenerating */
   prompt: string;
 };
 
 export type PartsSelection = Record<PartCategory, string>;
 
 export const PART_CATEGORIES: { id: PartCategory; label: string }[] = [
-  { id: "base", label: "Friend base" },
+  { id: "look", label: "Look" },
   { id: "outfit", label: "Outfit" },
   { id: "accessory", label: "Accessory" },
   { id: "backdrop", label: "Backdrop" },
@@ -19,32 +18,29 @@ export const PART_CATEGORIES: { id: PartCategory; label: string }[] = [
 
 export const PARTS: PartOption[] = [
   {
-    id: "base-dana",
-    label: "Dana",
-    category: "base",
-    prompt:
-      "cheerful East Asian girl, black bob hair, big shiny brown eyes, warm smile",
+    id: "look-kid-a",
+    label: "Kid A",
+    category: "look",
+    prompt: "cheerful child, soft black bob hair, big shiny eyes, warm smile",
   },
   {
-    id: "base-thea",
-    label: "Thea",
-    category: "base",
-    prompt:
-      "cheerful girl, long wavy brown hair, big expressive eyes, soft smile",
+    id: "look-kid-b",
+    label: "Kid B",
+    category: "look",
+    prompt: "cheerful child, long wavy brown hair, big expressive eyes, soft smile",
   },
   {
-    id: "base-ritsuki",
-    label: "Ritsuki",
-    category: "base",
+    id: "look-kid-c",
+    label: "Kid C",
+    category: "look",
     prompt:
-      "cool East Asian boy, short neat black hair, large dark eyes, slight confident smile, arms crossed",
+      "cool child, short neat black hair, large dark eyes, slight confident smile",
   },
   {
-    id: "base-josephine",
-    label: "Josephine",
-    category: "base",
-    prompt:
-      "sweet girl, soft dark hair, huge sparkling brown eyes, gentle smile",
+    id: "look-kid-d",
+    label: "Kid D",
+    category: "look",
+    prompt: "sweet child, soft dark hair, huge sparkling eyes, gentle smile",
   },
 
   {
@@ -52,7 +48,7 @@ export const PARTS: PartOption[] = [
     label: "Sun Hood",
     category: "outfit",
     prompt:
-      "ORIGINAL yellow round-eared sun-creature hoodie with brown tip stripes and peach belly patch (not any Nintendo character)",
+      "ORIGINAL yellow round-eared sun-creature hoodie with brown tip stripes (not any Nintendo character)",
   },
   {
     id: "outfit-maple",
@@ -71,8 +67,19 @@ export const PARTS: PartOption[] = [
     id: "outfit-kitty",
     label: "Kitty Hoodie",
     category: "outfit",
-    prompt:
-      "ORIGINAL pink kitty-ear hoodie with darker pink stripes, fashion-forward kids look",
+    prompt: "ORIGINAL pink kitty-ear hoodie with darker pink stripes",
+  },
+  {
+    id: "outfit-snack",
+    label: "Snack Hoodie",
+    category: "outfit",
+    prompt: "cozy brown snack-themed hoodie, warm pastry cafe vibes",
+  },
+  {
+    id: "outfit-night",
+    label: "Night PJs",
+    category: "outfit",
+    prompt: "soft night pajamas in a cozy bedroom, moonlit mood",
   },
 
   {
@@ -99,18 +106,24 @@ export const PARTS: PartOption[] = [
     category: "accessory",
     prompt: "bright gold friendship star pin on the chest",
   },
+  {
+    id: "acc-donut",
+    label: "Donut",
+    category: "accessory",
+    prompt: "holding a cute frosted donut snack",
+  },
 
   {
     id: "bg-sunny",
     label: "Sunny Street",
     category: "backdrop",
-    prompt: "painted sunny city street, blue sky, yellow buildings, soft sparkles",
+    prompt: "painted sunny city street, blue sky, soft sparkles",
   },
   {
     id: "bg-pumpkin",
     label: "Pumpkin Patch",
     category: "backdrop",
-    prompt: "painted pumpkin patch, hay bales, falling maple leaves, fluffy clouds",
+    prompt: "painted pumpkin patch, hay bales, falling maple leaves",
   },
   {
     id: "bg-aura",
@@ -123,6 +136,18 @@ export const PARTS: PartOption[] = [
     label: "Blossom Lane",
     category: "backdrop",
     prompt: "pastel blossom street with cherry petals and glitter sparkles",
+  },
+  {
+    id: "bg-cafe",
+    label: "Snack Cafe",
+    category: "backdrop",
+    prompt: "warm outdoor pastry cafe, soft bokeh, cozy snack vibes",
+  },
+  {
+    id: "bg-night",
+    label: "Night Nursery",
+    category: "backdrop",
+    prompt: "nighttime bedroom with crescent moon through the window, stars",
   },
 ];
 
@@ -140,72 +165,25 @@ export function summarizeParts(parts: PartsSelection): string {
     .join("; ");
 }
 
-/** Offline fallback art baked into /public/art (Gemini-quality stills). */
-export const THEME_ART: Record<string, string> = {
-  dana: "/art/dana.jpg",
-  thea: "/art/thea.jpg",
-  ritsuki: "/art/ritsuki.jpg",
-  josephine: "/art/josephine.jpg",
-};
-
-/**
- * Offline mix-and-match preview map when Gemini credits are unavailable.
- * Keys: `${outfit}` — picks closest baked variant.
- */
-export const OUTFIT_FALLBACK_ART: Record<string, string> = {
-  "outfit-sunhood": "/art/dana.jpg",
-  "outfit-maple": "/art/variants/maple-dress.jpg",
-  "outfit-aura": "/art/variants/aura-hoodie.jpg",
-  "outfit-kitty": "/art/variants/kitty-hoodie.jpg",
-};
-
 export const DEFAULT_PARTS: PartsSelection = {
-  base: "base-dana",
+  look: "look-kid-a",
   outfit: "outfit-sunhood",
   accessory: "acc-star-pin",
   backdrop: "bg-sunny",
 };
 
-export const THEME_DEFAULT_PARTS: Record<string, PartsSelection> = {
-  dana: {
-    base: "base-dana",
-    outfit: "outfit-sunhood",
-    accessory: "acc-star-pin",
-    backdrop: "bg-sunny",
-  },
-  thea: {
-    base: "base-thea",
-    outfit: "outfit-maple",
-    accessory: "acc-shades",
-    backdrop: "bg-pumpkin",
-  },
-  ritsuki: {
-    base: "base-ritsuki",
-    outfit: "outfit-aura",
-    accessory: "acc-none",
-    backdrop: "bg-aura",
-  },
-  josephine: {
-    base: "base-josephine",
-    outfit: "outfit-kitty",
-    accessory: "acc-bow-bag",
-    backdrop: "bg-blossom",
-  },
-};
+export const STARTER_ART = "/art/dana.jpg";
 
-export function fallbackArtFor(
-  themeId: string,
-  parts: PartsSelection,
-): string {
-  if (parts.base.startsWith("base-") && parts.outfit === THEME_DEFAULT_PARTS[themeId]?.outfit) {
-    return THEME_ART[themeId] || THEME_ART.dana;
-  }
-  if (parts.base === "base-ritsuki" && parts.outfit === "outfit-sunhood") {
-    return "/art/variants/boy-sunhood.jpg";
-  }
-  return (
-    OUTFIT_FALLBACK_ART[parts.outfit] ||
-    THEME_ART[themeId] ||
-    THEME_ART.dana
-  );
+export function fallbackArtFor(parts: PartsSelection): string {
+  if (parts.outfit === "outfit-maple") return "/art/variants/maple-dress.jpg";
+  if (parts.outfit === "outfit-aura") return "/art/variants/aura-hoodie.jpg";
+  if (parts.outfit === "outfit-kitty") return "/art/variants/kitty-hoodie.jpg";
+  if (parts.outfit === "outfit-night" || parts.backdrop === "bg-night")
+    return "/art/ritsuki.jpg";
+  if (parts.outfit === "outfit-snack" || parts.backdrop === "bg-cafe")
+    return "/art/thea.jpg";
+  if (parts.look === "look-kid-c") return "/art/variants/boy-sunhood.jpg";
+  if (parts.look === "look-kid-b") return "/art/thea.jpg";
+  if (parts.look === "look-kid-d") return "/art/josephine.jpg";
+  return STARTER_ART;
 }

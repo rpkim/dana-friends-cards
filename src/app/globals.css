@@ -9,6 +9,71 @@
 
 @theme inline {
   --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+.font-display {
+  font-family: var(--font-display), "Fredoka", sans-serif;
+}
+
+/* Outlined TCG name — text-shadow stack (more reliable than -webkit-text-stroke). */
+.card-name {
+  font-family: var(--font-display), "Fredoka", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.card-name--electric {
+  color: #1a2b8f;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    3px 3px 0 #ffd400,
+    4px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.card-name--autumn {
+  color: #5c2e0a;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    3px 3px 0 #e8a020,
+    4px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.card-name--aura {
+  color: #ffffff;
+  text-shadow:
+    -2px -2px 0 #2f6bff,
+    2px -2px 0 #2f6bff,
+    -2px 2px 0 #2f6bff,
+    2px 2px 0 #2f6bff,
+    0 0 10px #2f6bff,
+    3px 3px 0 #020814;
+}
+
+.card-name--sparkle {
+  color: #ff7ab8;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    -3px -3px 0 #6b1f52,
+    3px -3px 0 #6b1f52,
+    -3px 3px 0 #6b1f52,
+    3px 3px 0 #6b1f52,
+    4px 4px 0 rgba(0, 0, 0, 0.15);
+}
+
+.card-attack-name {
+  font-family: var(--font-display), "Fredoka", sans-serif;
+  font-weight: 700;
 }
 
 body {
