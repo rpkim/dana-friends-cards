@@ -78,14 +78,14 @@
 
 /**
  * Face-safe art framing (baked portraits, Gemini results, photo preview):
- * - cover fills the window like Dana/LOHA example cards
- * - NEVER `object-top` — that kept sky/ears and chopped through nose/chin
- * - Bias slightly below center so chin + mouth stay inside; ear tips may clip
- * - Pair with `.card-art-frame { flex-shrink: 0 }` so flex cannot crush the window
+ * - cover fills the leftover art window (flex-1 after shrink-0 lower half)
+ * - Bias toward the upper-mid so full face + chin stay in frame (not torso-only)
+ * - NEVER object-top alone — that chops through mouth/chin on tall portraits
  */
 .card-art-image {
   object-fit: cover;
-  object-position: center 48%;
+  /* Upper-mid bias: full face + chin; hood tips may clip slightly */
+  object-position: center 28%;
 }
 
 body {
