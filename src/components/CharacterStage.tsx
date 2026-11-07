@@ -92,6 +92,7 @@ export function CharacterStage({ artUrl, className, artPlan }: Props) {
               <span
                 key={`${label}-${i}`}
                 className="rounded-full bg-black/75 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-white shadow"
+                data-card-chrome="part-label"
               >
                 {label}
               </span>

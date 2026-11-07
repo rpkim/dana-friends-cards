@@ -1,5 +1,7 @@
 import { DEFAULT_CAPTION } from "@/lib/captions";
-import { THEMES, type PaletteId, type Theme } from "@/lib/themes";
+import { THEMES, type CardSpecial, type PaletteId, type Theme } from "@/lib/themes";
+
+export type { PaletteId };
 
 /** Editable fields for any custom card — not locked to example characters. */
 export type CardDraft = {
@@ -10,15 +12,21 @@ export type CardDraft = {
   attack1Name: string;
   attack1Damage: number;
   attack1Text: string;
+  /** Attack 1 select is Custom, so the name and description are typed in. */
+  attack1Custom?: boolean;
   attack2Name: string;
   attack2Damage: number;
   attack2Text: string;
+  /** Attack 2 select is Custom, so the name and description are typed in. */
+  attack2Custom?: boolean;
   weakness: string;
   resistance: string;
   retreat: number;
   flavor: string;
   cardNo: string;
   paletteId: PaletteId;
+  /** Gold or rainbow foil. A photo roll or the print admin can set it. */
+  special?: CardSpecial;
 };
 
 export function draftFromPalette(paletteId: PaletteId): CardDraft {
@@ -68,6 +76,10 @@ export function themeFromDraft(draft: CardDraft): Theme {
       },
     ],
     weakness: draft.weakness,
+    special:
+      draft.special === "gold" || draft.special === "rainbow"
+        ? draft.special
+        : undefined,
     resistance: draft.resistance,
     retreat: draft.retreat,
     flavor: draft.flavor,

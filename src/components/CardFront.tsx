@@ -29,19 +29,30 @@ export function CardFront({ data, className }: Props) {
   const { theme, artUrl, artPlan } = data;
   const name = (data.customName || theme.name).toUpperCase() || "FRIEND";
   const hp = data.customHp ?? theme.hp;
-  const isDark = theme.id === "aura";
+  const special = theme.special;
+  const isDark = theme.id === "aura" && !special;
   const typeLabel = theme.playType;
+  const nameClass = special ? `card-name--${special}` : `card-name--${theme.id}`;
+  const face = specialFace(theme);
+  const panelBg = special ? "#fffaf0" : theme.panel;
+  const attackInk = isDark ? "#fff" : special === "gold" ? "#3a2a08" : special === "rainbow" ? "#241428" : theme.accentDeep;
+  const bodyInk = isDark ? "#c9d6ff" : "#333";
 
   return (
     <article
-      className={`card-front relative flex aspect-[63/88] w-full flex-col overflow-hidden rounded-[22px] border-[7px] p-[7px] pb-[18px] shadow-[0_12px_28px_rgba(0,0,0,.28)] ${className ?? ""}`}
-      style={{
-        background: cardFaceGradient(theme),
-        borderColor: theme.border,
-        color: theme.text,
-      }}
+      className={`card-front card-scaled relative aspect-[63/88] w-full ${className ?? ""}`}
       data-card-side="front"
+      data-special={special || undefined}
     >
+      {/*
+        Type and padding are designed at 400px (studio width). This layer scales
+        to the real card width so a 63.5mm sleeve keeps the same art share
+        instead of letting the attack block crush the portrait to a hairline.
+      */}
+      <div
+        className="card-scale relative flex flex-col overflow-hidden rounded-[22px] border-[7px] p-[7px] pb-[18px]"
+        style={face}
+      >
       <CornerScrews />
       <BorderMotifStrip motif={theme.motif} isDark={isDark} />
       <HazardCorners accent={theme.accent} />
@@ -49,12 +60,13 @@ export function CardFront({ data, className }: Props) {
       <header className="relative z-10 flex shrink-0 items-start justify-between gap-2 px-1 pt-0.5">
         <div className="min-w-0 space-y-0.5">
           <h2
-            className={`card-name card-name--${theme.id} text-[clamp(1.45rem,4.8vw,2rem)]`}
+            className={`card-name ${nameClass} text-[clamp(1.45rem,4.8vw,2rem)]`}
           >
             {name}
           </h2>
           <span
             className="inline-flex items-center gap-1 rounded-full border-2 px-2 py-[1px] text-[9px] font-extrabold shadow-sm"
+            data-card-chrome="type-pill"
             style={{
               background: isDark ? theme.accentDeep : theme.accent,
               borderColor: theme.accentDeep,
@@ -68,6 +80,7 @@ export function CardFront({ data, className }: Props) {
         <div className="mt-0.5 flex shrink-0 items-center gap-1">
           <span
             className="flex h-7 w-7 items-center justify-center rounded-full border-2 shadow"
+            data-card-chrome="type-icon"
             style={{
               background: theme.accentSoft,
               borderColor: theme.accentDeep,
@@ -77,6 +90,7 @@ export function CardFront({ data, className }: Props) {
           </span>
           <div
             className="rounded-full border-2 px-2 py-0.5 text-[12px] font-black tracking-wide"
+            data-card-chrome="hp"
             style={{
               background: isDark ? theme.accentDeep : "#fffef6",
               borderColor: isDark ? "#fff" : theme.accentDeep,
@@ -110,6 +124,7 @@ export function CardFront({ data, className }: Props) {
         )}
         <div
           className="pointer-events-none absolute bottom-1 left-1 z-10 rounded-full px-1.5 py-0.5 text-[8px] font-bold shadow"
+          data-card-chrome="age"
           style={{
             background: isDark ? "rgba(6,20,51,.9)" : "rgba(255,255,255,.94)",
             color: isDark ? "#fff" : "#111",
@@ -118,7 +133,10 @@ export function CardFront({ data, className }: Props) {
           {theme.age}
           {theme.playfulness ? ` · ${theme.playfulness}` : ""}
         </div>
-        <span className="pointer-events-none absolute bottom-1 right-1 z-10 drop-shadow">
+        <span
+          className="pointer-events-none absolute bottom-1 right-1 z-10 drop-shadow"
+          data-card-chrome="motif"
+        >
           <MotifIcon motif={theme.motif} size={14} />
         </span>
       </div>
@@ -127,13 +145,14 @@ export function CardFront({ data, className }: Props) {
       <div className="relative z-10 mx-0.5 mt-1.5 flex shrink-0 flex-col gap-1">
         <div
           className="flex flex-col gap-0.5 rounded-md border border-black/5 px-1.5 py-1"
-          style={{ background: theme.panel }}
+          style={{ background: panelBg }}
         >
           {theme.attacks.map((atk, i) => (
             <div key={`${atk.name}-${i}`}>
               <div className="flex items-start gap-1.5">
                 <span
                   className="mt-0.5 shrink-0 rounded-full px-1.5 py-[2px] text-[8px] font-black tracking-wide text-white shadow"
+                  data-card-chrome="attack"
                   style={{
                     background: isDark ? theme.accent : theme.accentDeep,
                   }}
@@ -144,14 +163,14 @@ export function CardFront({ data, className }: Props) {
                   <div className="flex items-baseline gap-1.5">
                     <span
                       className="card-attack-name flex-1 text-[12px] leading-tight"
-                      style={{ color: isDark ? "#fff" : theme.accentDeep }}
+                      style={{ color: attackInk }}
                     >
                       {atk.name}
                     </span>
                     <span
                       className="font-display text-[15px] font-bold tabular-nums"
                       style={{
-                        color: isDark ? "#A8C4FF" : theme.accentDeep,
+                        color: isDark ? "#A8C4FF" : attackInk,
                       }}
                     >
                       {atk.damage}
@@ -159,7 +178,7 @@ export function CardFront({ data, className }: Props) {
                   </div>
                   <p
                     className="mt-0.5 text-[8.5px] leading-snug"
-                    style={{ color: isDark ? "#c9d6ff" : "#333" }}
+                    style={{ color: bodyInk }}
                   >
                     {atk.description}
                   </p>
@@ -180,9 +199,9 @@ export function CardFront({ data, className }: Props) {
         <div
           className="grid grid-cols-3 gap-0.5 rounded-sm border px-1.5 py-0.5 text-[8px] font-bold"
           style={{
-            background: isDark ? "#061433" : theme.accentSoft,
-            borderColor: theme.accentDeep,
-            color: isDark ? "#fff" : theme.accentDeep,
+            background: special ? "#fffaf0" : isDark ? "#061433" : theme.accentSoft,
+            borderColor: special === "gold" ? "#8a6414" : special === "rainbow" ? "#5c3d78" : theme.accentDeep,
+            color: isDark ? "#fff" : attackInk,
           }}
         >
           <div className="flex items-center gap-0.5">
@@ -215,19 +234,47 @@ export function CardFront({ data, className }: Props) {
           className="relative z-10 px-1 pb-0.5 pt-0.5 text-center text-[7px] font-semibold tracking-wide"
           style={{ color: isDark ? "#A8C4FF" : "#333", opacity: 0.9 }}
         >
-          Card No. {theme.cardNo} • Custom Card • © DANA &amp; FRIENDS 2026 •
-          Play Set
+          Card No. {theme.cardNo} • © DANA &amp; FRIENDS 2026 • LIMITED Edition
         </footer>
+      </div>
       </div>
     </article>
   );
 }
 
-function cardFaceGradient(theme: Theme) {
-  if (theme.id === "aura") {
-    return `radial-gradient(circle at 50% 0%, #2a5fd4 0%, ${theme.accentDeep} 55%, #020814 100%)`;
+function specialFace(theme: Theme): {
+  background: string;
+  borderColor: string;
+  color: string;
+} {
+  if (theme.special === "gold") {
+    return {
+      background:
+        "linear-gradient(165deg, #fff8d2 0%, #f6d56a 30%, #e2b03a 58%, #fff4b8 80%, #c9922a 100%)",
+      borderColor: "#8a6414",
+      color: "#3a2a08",
+    };
   }
-  return `linear-gradient(165deg, ${theme.accentSoft} 0%, ${theme.accent} 42%, ${theme.border} 100%)`;
+  if (theme.special === "rainbow") {
+    return {
+      background:
+        "linear-gradient(#fffdf8, #fff7fb) padding-box, linear-gradient(135deg, #ff7ab8, #ffe56a, #7dffa0, #7eb6ff, #d7b0ff) border-box",
+      borderColor: "transparent",
+      color: "#241428",
+    };
+  }
+  if (theme.id === "aura") {
+    return {
+      background: `radial-gradient(circle at 50% 0%, #2a5fd4 0%, ${theme.accentDeep} 55%, #020814 100%)`,
+      borderColor: theme.border,
+      color: theme.text,
+    };
+  }
+  return {
+    background: `linear-gradient(165deg, ${theme.accentSoft} 0%, ${theme.accent} 42%, ${theme.border} 100%)`,
+    borderColor: theme.border,
+    color: theme.text,
+  };
 }
 
 function CornerScrews() {
@@ -243,6 +290,7 @@ function CornerScrews() {
         <span
           key={p}
           className={`pointer-events-none absolute z-30 h-2.5 w-2.5 rounded-full border border-black/40 bg-[radial-gradient(circle_at_30%_30%,#fff,#d0d0d0_55%,#777)] shadow ${p}`}
+          data-card-chrome="screw"
         />
       ))}
     </>

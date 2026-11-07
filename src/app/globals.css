@@ -57,6 +57,28 @@
     3px 3px 0 #020814;
 }
 
+.card-name--gold {
+  color: #5c3b08;
+  text-shadow:
+    -2px -2px 0 #fff8dc,
+    2px -2px 0 #fff8dc,
+    -2px 2px 0 #fff8dc,
+    2px 2px 0 #fff8dc,
+    3px 3px 0 #e6c35c,
+    4px 4px 0 rgba(90, 60, 8, 0.25);
+}
+
+.card-name--rainbow {
+  color: #3a2158;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    3px 3px 0 #ff9ac8,
+    4px 4px 0 #7eb6ff;
+}
+
 .card-name--sparkle {
   color: #ff7ab8;
   text-shadow:
@@ -130,6 +152,55 @@ body {
   animation: soft-pop 0.55s ease-out both;
 }
 
+/*
+ * Portrait and back art are laid out at the studio card width (400px), then
+ * scaled to whatever width the face actually has — including a 63.5mm sleeve.
+ * Fixed px type at sleeve width used to squeeze the art window to a hairline.
+ */
+.card-scaled {
+  container-type: inline-size;
+  overflow: hidden;
+  border-radius: 5.5% / 3.94%;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.card-scale {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 400px;
+  height: calc(400px * 88 / 63);
+  transform-origin: top left;
+  transform: scale(calc(100cqi / 400px));
+}
+
+/* Freeze motion and drop the outer shadow so the bitmap is the card edge. */
+html.exporting-card .card-front,
+html.exporting-card .card-back,
+html.exporting-card [data-export-root] {
+  animation: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/*
+ * Badge chrome (type icon, type pill, HP, attack pills, age mark, motif,
+ * corner screws) may keep a soft shadow on the studio card. Print zoom and
+ * PNG capture turn that shade into a hard offset, so those paths are flat.
+ * Name outlines stay — they are text-shadow stacks on .card-name, not badges.
+ */
+html.exporting-card [data-card-chrome],
+.admin-print-slot [data-card-chrome],
+.print-sheet [data-card-chrome],
+[data-card-raster] [data-card-chrome],
+[data-instagram-raster] [data-card-chrome] {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+/* Sleeve type follows .card-scale, so export sheets must not restyle it in mm. */
+
 /* Card-back brand title — bubble outline per palette */
 .card-back-title--electric {
   color: #1a2b8f;
@@ -159,6 +230,220 @@ body {
     2px 2px 0 #2f6bff,
     3px 3px 0 #020814;
 }
+.card-back-title--gold {
+  color: #5c3b08;
+  text-shadow:
+    -2px -2px 0 #fff6cc,
+    2px -2px 0 #fff6cc,
+    -2px 2px 0 #fff6cc,
+    2px 2px 0 #fff6cc,
+    3px 3px 0 #e6c35c,
+    5px 5px 0 #a97818;
+}
+
+.card-back-title--rainbow {
+  color: #3a2158;
+  text-shadow:
+    -2px -2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px 2px 0 #fff,
+    3px 3px 0 #ff6aa8,
+    5px 5px 0 #6eb0ff;
+}
+
+/*
+ * Rainbow foil frame. Painted on the 400px card face, then scaled to the
+ * 63.5 × 88.9 mm sleeve. The cream panel covers the middle so the scene
+ * and the words stay readable.
+ */
+.card-back-rainbow-shell {
+  background: conic-gradient(
+    from 200deg,
+    #ff2f6a 0deg,
+    #ff2f6a 28deg,
+    #ff8a1e 58deg,
+    #ffe23a 100deg,
+    #5dff7a 145deg,
+    #2ad4ff 190deg,
+    #4d6bff 235deg,
+    #c45bff 278deg,
+    #ff4db8 322deg,
+    #ff2f6a 360deg
+  );
+  box-shadow:
+    inset 0 0 0 2px rgba(32, 12, 40, 0.82),
+    inset 0 0 0 4px rgba(255, 255, 255, 0.55);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.card-back-rainbow-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 36%,
+    rgba(255, 255, 255, 0.82) 46%,
+    rgba(255, 255, 255, 0.18) 53%,
+    rgba(255, 255, 255, 0) 62%
+  );
+}
+
+.card-back-rainbow-corner {
+  position: absolute;
+  z-index: 30;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #2a1438;
+  border-radius: 4px;
+  background: conic-gradient(
+    from 20deg,
+    #ff4d7a,
+    #ffe14a,
+    #5dffb0,
+    #4eb6ff,
+    #d08bff,
+    #ff4d7a
+  );
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+}
+
+.card-back-rainbow-corner--tl {
+  top: 6px;
+  left: 6px;
+}
+.card-back-rainbow-corner--tr {
+  top: 6px;
+  right: 6px;
+}
+.card-back-rainbow-corner--bl {
+  bottom: 6px;
+  left: 6px;
+}
+.card-back-rainbow-corner--br {
+  right: 6px;
+  bottom: 6px;
+}
+
+.card-back-rainbow-banner {
+  position: absolute;
+  z-index: 32;
+  top: 8px;
+  right: 0;
+  left: 0;
+  width: fit-content;
+  margin-inline: auto;
+  padding: 3px 16px 4px;
+  border: 2px solid #2a1438;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #ff4d7a 0%,
+    #ffe14a 28%,
+    #7dffb0 52%,
+    #5eb6ff 74%,
+    #e09bff 100%
+  );
+  color: #2a1438;
+  font-family: var(--font-display), "Fredoka", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Gold foil frame. Same geometry as the rainbow foil, in metallic gold. */
+.card-back-gold-shell {
+  background: conic-gradient(
+    from 200deg,
+    #fff6cc 0deg,
+    #f6d56a 40deg,
+    #c9922a 95deg,
+    #fff1b8 145deg,
+    #e6c35c 195deg,
+    #8a6414 240deg,
+    #f3d37a 290deg,
+    #fff8d2 330deg,
+    #d4a017 360deg
+  );
+  box-shadow:
+    inset 0 0 0 2px rgba(74, 48, 8, 0.88),
+    inset 0 0 0 4px rgba(255, 248, 220, 0.72);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.card-back-gold-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 244, 200, 0) 36%,
+    rgba(255, 255, 255, 0.88) 46%,
+    rgba(255, 230, 150, 0.22) 53%,
+    rgba(255, 255, 255, 0) 62%
+  );
+}
+
+.card-back-gold-corner {
+  position: absolute;
+  z-index: 30;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #5c3b08;
+  border-radius: 4px;
+  background: linear-gradient(145deg, #fff8d2 0%, #f3d37a 38%, #a97818 72%, #fff1b8 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.92);
+}
+
+.card-back-gold-corner--tl {
+  top: 6px;
+  left: 6px;
+}
+.card-back-gold-corner--tr {
+  top: 6px;
+  right: 6px;
+}
+.card-back-gold-corner--bl {
+  bottom: 6px;
+  left: 6px;
+}
+.card-back-gold-corner--br {
+  right: 6px;
+  bottom: 6px;
+}
+
+.card-back-gold-banner {
+  position: absolute;
+  z-index: 32;
+  top: 8px;
+  right: 0;
+  left: 0;
+  width: fit-content;
+  margin-inline: auto;
+  padding: 3px 16px 4px;
+  border: 2px solid #5c3b08;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fff6cc 0%, #f3d37a 32%, #e6c35c 58%, #fff1b8 78%, #d4a017 100%);
+  color: #5c3b08;
+  font-family: var(--font-display), "Fredoka", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
 .card-back-title--sparkle {
   color: #ff7ab8;
   text-shadow:
@@ -178,5 +463,192 @@ body {
   aside,
   button {
     display: none !important;
+  }
+  [data-card-chrome] {
+    box-shadow: none !important;
+    filter: none !important;
+    text-shadow: none !important;
+  }
+}
+
+/*
+ * Admin 9-up. Card is the sleeve size (63.5 × 88.9 mm). A 2 mm gap still
+ * leaves 7.75 mm at each side and 13.15 mm at top and bottom of A4
+ * (210 × 297 mm): 3×63.5 + 2×2 = 194.5, 3×88.9 + 2×2 = 270.7.
+ * The sheet label sits in that top margin. Cards are not scaled.
+ */
+.admin-sheet {
+  --admin-gap: 2mm;
+  --admin-card-w: 63.5mm;
+  --admin-card-h: 88.9mm;
+  position: relative;
+  box-sizing: border-box;
+  width: 210mm;
+  height: 297mm;
+  max-height: 297mm;
+  overflow: hidden;
+  background: #fff;
+  padding: calc((297mm - (var(--admin-card-h) * 3 + var(--admin-gap) * 2)) / 2)
+    calc((210mm - (var(--admin-card-w) * 3 + var(--admin-gap) * 2)) / 2);
+}
+
+.admin-drop-line {
+  display: block;
+  width: 2.75rem;
+  height: 3px;
+  margin: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: #14121a;
+}
+
+.admin-sheet-label {
+  position: absolute;
+  top: 3.2mm;
+  right: 8mm;
+  left: 8mm;
+  z-index: 2;
+  margin: 0;
+  color: #1a1a1a;
+  font-family: var(--font-body), "Nunito", sans-serif;
+  font-size: 8pt;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.admin-print-grid {
+  display: grid;
+  width: calc(var(--admin-card-w) * 3 + var(--admin-gap) * 2);
+  height: calc(var(--admin-card-h) * 3 + var(--admin-gap) * 2);
+  grid-template-columns: repeat(3, var(--admin-card-w));
+  grid-template-rows: repeat(3, var(--admin-card-h));
+  gap: var(--admin-gap);
+  align-content: start;
+  justify-content: start;
+}
+
+.admin-print-slot {
+  width: var(--admin-card-w);
+  height: var(--admin-card-h);
+  min-width: var(--admin-card-w);
+  min-height: var(--admin-card-h);
+  overflow: hidden;
+  background: #fff;
+}
+
+.admin-print-slot .card-front,
+.admin-print-slot .card-back,
+.admin-print-slot .card-scaled {
+  width: var(--admin-card-w) !important;
+  height: var(--admin-card-h) !important;
+  max-width: none !important;
+  aspect-ratio: auto !important;
+  animation: none !important;
+  box-shadow: none !important;
+  container-type: normal !important;
+}
+
+/*
+ * The studio face is a 400px design scaled with transform. In print that
+ * pre-transform box is ~106 × 148 mm, so Chrome fragments it onto an extra
+ * page and can clip the top row. zoom changes the used box: 400 × 0.6 = 240px
+ * = 63.5 mm, and 560 × 0.6 = 336px = 88.9 mm.
+ */
+.admin-print-slot .card-scale {
+  transform: none !important;
+  zoom: 0.6;
+  width: 400px !important;
+  height: 560px !important;
+}
+
+@media screen {
+  .admin-sheets {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    padding: 8px 16px 64px;
+    overflow-x: auto;
+  }
+
+  .admin-sheet {
+    flex: 0 0 auto;
+    outline: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  /*
+   * Pin the sheet to A4. Chrome's macOS print dialog still lays the document
+   * out in the window (about 900px wide) and then fits that window onto A4,
+   * which shrinks a 63.5 mm card to about 55.8 mm. zoom is 1 when 100vw is
+   * already 210 mm, and window/A4 otherwise, so the fit lands back on the sleeve.
+   */
+  html:has(.admin-root),
+  body:has(.admin-root) {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    background: #fff !important;
+    background-attachment: scroll !important;
+  }
+
+  html:has(.admin-root) {
+    zoom: calc(100vw / 210mm);
+  }
+
+  .admin-chrome,
+  body:has(.admin-root) nextjs-portal {
+    display: none !important;
+  }
+
+  .admin-root,
+  .admin-sheets {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    gap: 0 !important;
+  }
+
+  .admin-sheet {
+    margin: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: auto;
+    page-break-after: auto;
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  /* Break before the next sheet only. break-after on a full A4 sheet
+     leaves a blank page after the back. */
+  .admin-sheet + .admin-sheet {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .admin-sheet,
+  .admin-sheet * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* The studio print rule hides every header. Card fronts use <header> for the name and HP. */
+  .admin-sheet header {
+    display: flex !important;
   }
 }

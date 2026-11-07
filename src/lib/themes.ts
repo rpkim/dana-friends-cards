@@ -6,6 +6,9 @@
 
 export type PaletteId = "electric" | "autumn" | "aura" | "sparkle";
 
+/** Rare foil from a photo-generate roll. Not a palette-picker choice. */
+export type CardSpecial = "gold" | "rainbow";
+
 export type Attack = {
   name: string;
   damage: number;
@@ -40,6 +43,8 @@ export type Theme = {
   /** Optional Gemini style-reference image (example card polish) */
   exampleRef?: string;
   starterArt?: string;
+  /** Gold foil or rainbow background. Absent on a normal card. */
+  special?: CardSpecial;
 };
 
 export const THEMES: Record<PaletteId, Theme> = {

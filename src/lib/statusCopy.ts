@@ -51,7 +51,7 @@ export function rateLimitStatus(detail?: string): StatusMsg {
 export function stylizeLoading(): StatusMsg {
   return {
     kind: "loading",
-    en: "Creating A4 print sheet (front + back) from photo…",
+    en: "Stylizing the portrait and the Friends back…",
   };
 }
 
@@ -62,10 +62,24 @@ export function composeLoading(): StatusMsg {
   };
 }
 
+export function refineLoading(): StatusMsg {
+  return {
+    kind: "loading",
+    en: "Refining the portrait…",
+  };
+}
+
+export function refineSuccess(model?: string): StatusMsg {
+  return {
+    kind: "success",
+    en: `Portrait refined${model ? ` (${model})` : ""}. This version is saved. Undo change restores the previous portrait.`,
+  };
+}
+
 export function stylizeSuccess(model?: string): StatusMsg {
   return {
     kind: "success",
-    en: `A4 print sheet ready — front + back side by side${model ? ` (${model})` : ""}.`,
+    en: `Portrait ready. The name back uses your Friends scene${model ? ` (${model})` : ""}.`,
   };
 }
 
@@ -201,5 +215,32 @@ export function fromApiFailure(input: {
   return {
     kind: "error",
     en: `${statusLabel ? statusLabel + ": " : ""}${raw.slice(0, 160)}${raw.length > 160 ? "…" : ""}`,
+  };
+}
+
+/** Refine failures keep the API text. Kind and links still follow the classifier. */
+export function refineFailure(input: {
+  reason?: string | null;
+  billing?: boolean;
+  httpStatus?: number;
+  errorKind?: GeminiErrorKind | string | null;
+}): StatusMsg {
+  const raw = (input.reason || "").trim();
+  const mapped = fromApiFailure({
+    ...input,
+    reason: raw || "Refine failed.",
+    context: "stylize",
+  });
+  if (!raw) {
+    return mapped.kind === "error"
+      ? {
+          ...mapped,
+          en: "Refine failed. The current portrait stays on the card.",
+        }
+      : mapped;
+  }
+  return {
+    ...mapped,
+    en: raw.length > 360 ? `${raw.slice(0, 360)}…` : raw,
   };
 }

@@ -103,9 +103,9 @@ export async function POST(req: Request) {
       cardFields,
     };
 
-    // Sheet, unified friends-scene (shared by both backs), and front portrait.
-    const [sheetR, friendsR, portraitR] = await Promise.all([
-      generateChibiImage({ ...common, photoKind: "sheet" }),
+    // Portrait for the front art, and one friends scene for the name back.
+    // No A4 sheet — Dana & Friends keeps stock back art.
+    const [friendsR, portraitR] = await Promise.all([
       generateChibiImage({
         ...common,
         photoKind: "friends-scene",
@@ -114,8 +114,8 @@ export async function POST(req: Request) {
       generateChibiImage({ ...common, photoKind: "portrait" }),
     ]);
 
-    if (!sheetR.ok && !friendsR.ok && !portraitR.ok) {
-      const fail = !sheetR.ok ? sheetR : !friendsR.ok ? friendsR : portraitR;
+    if (!friendsR.ok && !portraitR.ok) {
+      const fail = !portraitR.ok ? portraitR : friendsR;
       return NextResponse.json({
         fallback: true,
         reason: !fail.ok ? fail.reason : "All image generations failed",
@@ -125,34 +125,27 @@ export async function POST(req: Request) {
       });
     }
 
-    // No warmSkin post-process — it muddy-stained foreheads brown.
     return NextResponse.json({
-      image: sheetR.ok ? sheetR.image : undefined,
-      kind: "print-sheet",
       /** Personalized friends scene for {name} & Friends back only. */
       friendsScene: friendsR.ok ? friendsR.image : undefined,
       /** @deprecated alias — same as friendsScene */
       nameBack: friendsR.ok ? friendsR.image : undefined,
       portrait: portraitR.ok ? portraitR.image : undefined,
       provider: "google-gemini",
-      model: sheetR.ok
-        ? sheetR.model
-        : portraitR.ok
-          ? portraitR.model
-          : friendsR.ok
-            ? friendsR.model
-            : undefined,
+      model: portraitR.ok
+        ? portraitR.model
+        : friendsR.ok
+          ? friendsR.model
+          : undefined,
       styleModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-      prompt: sheetR.ok ? sheetR.prompt : undefined,
       friendsScenePrompt: friendsR.ok ? friendsR.prompt : undefined,
       portraitPrompt: portraitR.ok ? portraitR.prompt : undefined,
       partial: {
-        sheet: sheetR.ok,
         friendsScene: friendsR.ok,
         nameBack: friendsR.ok,
         portrait: portraitR.ok,
       },
-      reason: !sheetR.ok && "reason" in sheetR ? sheetR.reason : undefined,
+      reason: !portraitR.ok && "reason" in portraitR ? portraitR.reason : undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Stylize failed";

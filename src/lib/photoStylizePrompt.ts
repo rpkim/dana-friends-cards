@@ -68,6 +68,32 @@ Primary Color Theme: {CHROME_PALETTE_STYLE}
 - Natural skin tone on the face — theme color stays on hoodie/border/background only.
 - High quality 2D anime vector style, clean line art.`;
 
+/**
+ * Edit an existing chibi portrait. The instruction is the only requested change.
+ * No card chrome, no A4 sheet, no friends scene unless the instruction asks.
+ */
+export function buildRefinePortraitPrompt(instruction: string): string {
+  const change = instruction.trim();
+  return `[TASK]
+Edit the attached image. It is an existing cute anime/chibi trading-card PORTRAIT. Apply only the requested change and return one portrait.
+
+[KEEP]
+- The same character. Same face and identity, except where the instruction changes them.
+- The same chibi/anime card-portrait style: soft cel shading, clean linework, cute proportions.
+- The same framing: full face visible, head and shoulders, simple background.
+- Natural skin tone unless the instruction explicitly changes skin.
+- No card frame, no card chrome, no letters, no watermark.
+
+[CHANGE — ONLY THIS]
+${change}
+
+[STRICT]
+- Change only what the instruction asks. Leave hair, expression, outfit, pose, accessories, and background alone when they are not mentioned.
+- Do not invent a new character. Do not restyle the whole picture.
+- Do not draw a full trading card, an A4 sheet, or a friends-scene crowd unless the instruction explicitly asks for that.
+- Output one edited portrait only. Never a raw photograph.`;
+}
+
 /** Portrait-only for the live card art frame (never a full sheet). */
 export const PHOTO_PORTRAIT_TEMPLATE = `[TASK]
 Stylize the person in the provided photo as a single cute anime/chibi trading-card portrait for the FRONT art box only.

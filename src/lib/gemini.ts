@@ -9,11 +9,17 @@ import {
   buildNameFriendsBackPrompt,
   buildPhotoPrintSheetPrompt,
   buildPortraitPrompt,
+  buildRefinePortraitPrompt,
   type PhotoPrintSheetFields,
 } from "@/lib/photoStylizePrompt";
 import type { GeminiErrorKind } from "@/lib/statusCopy";
 
-export type PhotoGenKind = "sheet" | "name-back" | "portrait" | "friends-scene";
+export type PhotoGenKind =
+  | "sheet"
+  | "name-back"
+  | "portrait"
+  | "friends-scene"
+  | "refine";
 
 export function getGeminiApiKey(): string | undefined {
   return (
@@ -62,6 +68,18 @@ export function resolveRequestImageModel(
   return { ok: true, id: DEFAULT_IMAGE_MODEL_ID };
 }
 
+function photoKindPrompt(
+  photoKind: PhotoGenKind,
+  cardFields?: PhotoPrintSheetFields,
+  extra?: string,
+): string {
+  if (photoKind === "name-back") return buildNameFriendsBackPrompt(cardFields);
+  if (photoKind === "portrait") return buildPortraitPrompt(cardFields);
+  if (photoKind === "friends-scene") return buildFriendsScenePrompt(cardFields);
+  if (photoKind === "refine") return buildRefinePortraitPrompt(extra || "");
+  return buildPhotoPrintSheetPrompt(cardFields);
+}
+
 /** Parts-mixer only — never used for photo stylize (photo uses PHOTO_STYLIZE_INSTRUCTION). */
 const PARTS_STYLE_SYSTEM = `You are the art director for Dana & Friends custom trading cards.
 Write ONE dense image-generation prompt for polished anime/chibi TCG portrait art from parts.
@@ -78,18 +96,9 @@ export async function buildChibiPrompt(input: {
   cardFields?: PhotoPrintSheetFields;
   photoKind?: PhotoGenKind;
 }): Promise<string> {
-  // Photo mode: pick sheet / name-back / portrait / friends-scene template.
+  // Photo mode: sheet / name-back / portrait / friends-scene / refine.
   if (input.mode === "photo") {
-    if (input.photoKind === "name-back") {
-      return buildNameFriendsBackPrompt(input.cardFields);
-    }
-    if (input.photoKind === "portrait") {
-      return buildPortraitPrompt(input.cardFields);
-    }
-    if (input.photoKind === "friends-scene") {
-      return buildFriendsScenePrompt(input.cardFields);
-    }
-    return buildPhotoPrintSheetPrompt(input.cardFields);
+    return photoKindPrompt(input.photoKind || "sheet", input.cardFields, input.extra);
   }
 
   const google = getGeminiClient();
@@ -273,15 +282,10 @@ export async function generateChibiImage(opts: {
   const photoKind = opts.photoKind || "sheet";
 
   // Photo path: template + attached photo (never text-only).
+  // Refine edits the attached portrait; it does not rebuild the sheet.
   // Parts path: still builds a compose prompt (may invent character from parts).
   const prompt = isPhoto
-    ? photoKind === "name-back"
-      ? buildNameFriendsBackPrompt(opts.cardFields)
-      : photoKind === "portrait"
-        ? buildPortraitPrompt(opts.cardFields)
-        : photoKind === "friends-scene"
-          ? buildFriendsScenePrompt(opts.cardFields)
-          : buildPhotoPrintSheetPrompt(opts.cardFields)
+    ? photoKindPrompt(photoKind, opts.cardFields, opts.extra)
     : await buildChibiPrompt({
         theme: opts.theme,
         mode: opts.mode,
@@ -289,6 +293,19 @@ export async function generateChibiImage(opts: {
         partsSummary: opts.partsSummary,
         extra: opts.extra,
       });
+
+  if (
+    isPhoto &&
+    photoKind === "refine" &&
+    !prompt.includes("[CHANGE — ONLY THIS]")
+  ) {
+    return {
+      ok: false,
+      reason:
+        "Refine prompt did not stay on the portrait edit. The picture was not changed.",
+      errorKind: "other",
+    };
+  }
 
   // Log exact prompt used (never log API keys or image bytes).
   console.info("[gemini] image model:", model);
@@ -305,13 +322,16 @@ export async function generateChibiImage(opts: {
     // Photo FIRST as image input — identity source of truth.
     content.push({
       type: "text",
-      text: "Attached photo of the person to stylize (identity source — keep this same person as the central kid):",
+      text:
+        photoKind === "refine"
+          ? "Attached image is the CURRENT stylized card portrait. Edit this same character in this same chibi/anime portrait style. Apply only the requested change:"
+          : "Attached photo of the person to stylize (identity source — keep this same person as the central kid):",
     });
     content.push({
       type: "image",
       image: `data:${opts.sourceImage.mediaType};base64,${opts.sourceImage.base64}`,
     });
-    if (opts.referenceImage) {
+    if (opts.referenceImage && photoKind !== "refine") {
       content.push({
         type: "text",
         text:
