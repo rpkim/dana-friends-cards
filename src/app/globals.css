@@ -57,6 +57,26 @@
     3px 3px 0 #020814;
 }
 
+/*
+ * The 10px #2f6bff glow is only a soft highlight on the studio card.
+ * Print, and macOS Preview, draw that blurred text-shadow as a solid
+ * rectangle behind the glyphs. PNG capture can do the same. These paths
+ * keep the hard outline so the white name stays readable, with no plate.
+ */
+html.exporting-card .card-name--aura,
+.admin-print-slot .card-name--aura,
+.print-sheet .card-name--aura,
+[data-card-raster] .card-name--aura,
+[data-instagram-raster] .card-name--aura {
+  background-color: transparent;
+  text-shadow:
+    -2px -2px 0 #2f6bff,
+    2px -2px 0 #2f6bff,
+    -2px 2px 0 #2f6bff,
+    2px 2px 0 #2f6bff,
+    3px 3px 0 #020814;
+}
+
 .card-name--gold {
   color: #5c3b08;
   text-shadow:
@@ -468,6 +488,16 @@ html.exporting-card [data-card-chrome],
     box-shadow: none !important;
     filter: none !important;
     text-shadow: none !important;
+  }
+  /* Blurred aura glow prints as a solid #2f6bff plate. Hard outline stays. */
+  .card-name--aura {
+    background-color: transparent !important;
+    text-shadow:
+      -2px -2px 0 #2f6bff,
+      2px -2px 0 #2f6bff,
+      -2px 2px 0 #2f6bff,
+      2px 2px 0 #2f6bff,
+      3px 3px 0 #020814 !important;
   }
 }
 

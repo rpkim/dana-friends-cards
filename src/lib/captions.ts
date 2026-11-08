@@ -2,8 +2,6 @@
 export const CAPTION_PRESETS = [
   "Cuteness 100%",
   "Playfulness 100%",
-  "Age 6 • Playfulness 100%",
-  "Almost 2 • Cuteness 100%",
   "Smile Power 100%",
   "Energy 999",
   "Best Friend Mode",
