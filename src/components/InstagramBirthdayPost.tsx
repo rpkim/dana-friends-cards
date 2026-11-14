@@ -205,7 +205,7 @@ export function InstagramBirthdayPost({
             lineHeight: 1.1,
           }}
         >
-          Bring {friend} to the party
+          {friend} came to play!
         </p>
         <p
           style={{
@@ -215,7 +215,7 @@ export function InstagramBirthdayPost({
             letterSpacing: "0.04em",
           }}
         >
-          A Dana &amp; Friends card · 7th birthday party
+          A little friend for Dana’s big day
         </p>
       </div>
     </div>
