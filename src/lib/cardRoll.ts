@@ -13,6 +13,7 @@ export const WEAKNESS_OPTIONS = [
   "Rain ×2",
   "Sparkle ×2",
   "Bedtime ×2",
+  "Snow ×2",
 ] as const;
 
 export type WeaknessOption = (typeof WEAKNESS_OPTIONS)[number];

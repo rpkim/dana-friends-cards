@@ -12,10 +12,121 @@ import {
   type CardTreatment,
   type SavedCard,
 } from "@/lib/cardLibrary";
+import {
+  ADMIN_BACK_SHIFT_MAX_MM,
+  ADMIN_BACK_SHIFT_MIN_MM,
+  buildAdminSheetPdf,
+  clampAdminBackShiftMm,
+  type AdminPdfPage,
+  type AdminPrintMode,
+} from "@/lib/adminPrintPdf";
 import { buildCardsZip, downloadCardsZip, importCardsZip } from "@/lib/cardZip";
 import { themeFromDraft } from "@/lib/cardModel";
+import { rasterizeCard } from "@/lib/exportCard";
 
 const PAGE_SIZE = 9;
+const BACK_SHIFT_STORAGE_KEY = "dana-admin-back-shift-mm";
+
+function readStoredBackShift() {
+  try {
+    return clampAdminBackShiftMm(Number(window.localStorage.getItem(BACK_SHIFT_STORAGE_KEY)));
+  } catch {
+    return 0;
+  }
+}
+
+function storeBackShift(mm: number) {
+  try {
+    window.localStorage.setItem(BACK_SHIFT_STORAGE_KEY, String(mm));
+  } catch {
+    // Printing still uses the number on screen.
+  }
+}
+
+function formatBackShift(mm: number) {
+  if (mm > 0) return `+${mm} mm`;
+  return `${mm} mm`;
+}
+
+/** JPEG keeps the print file small. The PDF still draws each sleeve at 63.5 × 88.9 mm. */
+function jpegForPrint(png: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(png);
+        return;
+      }
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+      resolve(canvas.toDataURL("image/jpeg", 0.92));
+    };
+    image.onerror = () => reject(new Error("Could not prepare a card for the print PDF."));
+    image.src = png;
+  });
+}
+
+/**
+ * One frame color for the extra-back plate. Samples the card's own outer edge
+ * (border, foil, or scene) a few pixels in, so a rounded antialias or a
+ * corner ornament does not decide the color.
+ */
+function sampleFrameColor(png: string): Promise<[number, number, number]> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context || canvas.width < 3 || canvas.height < 3) {
+        resolve([255, 248, 232]);
+        return;
+      }
+      context.drawImage(image, 0, 0);
+      const width = canvas.width;
+      const height = canvas.height;
+      const frame = context.getImageData(0, 0, width, height);
+      const inset = Math.min(14, Math.floor((width - 1) / 2), Math.floor((height - 1) / 2));
+      const samples: number[][] = [];
+      const take = (x: number, y: number) => {
+        const i = (y * width + x) * 4;
+        if ((frame.data[i + 3] ?? 0) < 200) return;
+        samples.push([frame.data[i] ?? 0, frame.data[i + 1] ?? 0, frame.data[i + 2] ?? 0]);
+      };
+      const x0 = Math.floor(width * 0.3);
+      const x1 = Math.ceil(width * 0.7);
+      const y0 = Math.floor(height * 0.3);
+      const y1 = Math.ceil(height * 0.7);
+      const stepX = Math.max(1, Math.floor((x1 - x0) / 16));
+      const stepY = Math.max(1, Math.floor((y1 - y0) / 16));
+      for (let x = x0; x < x1; x += stepX) {
+        take(x, inset);
+        take(x, height - 1 - inset);
+      }
+      for (let y = y0; y < y1; y += stepY) {
+        take(inset, y);
+        take(width - 1 - inset, y);
+      }
+      if (samples.length === 0) {
+        resolve([255, 248, 232]);
+        return;
+      }
+      const channel = (n: number) => {
+        const values = samples.map((sample) => sample[n] ?? 0).sort((a, b) => a - b);
+        return values[Math.floor(values.length / 2)] ?? 255;
+      };
+      resolve([channel(0), channel(1), channel(2)]);
+    };
+    image.onerror = () => reject(new Error("Could not prepare a card for the print PDF."));
+    image.src = png;
+  });
+}
 
 /**
  * Long-edge flip swaps left and right and keeps the row.
@@ -93,6 +204,9 @@ export default function AdminPrintPage() {
   const [deleteNote, setDeleteNote] = useState<{ error: boolean; text: string } | null>(null);
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [orderNote, setOrderNote] = useState<{ error: boolean; text: string } | null>(null);
+  const [printBusy, setPrintBusy] = useState<AdminPrintMode | null>(null);
+  const [printNote, setPrintNote] = useState<{ error: boolean; text: string } | null>(null);
+  const [backShiftMm, setBackShiftMm] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; place: DropPlace } | null>(null);
 
@@ -102,6 +216,10 @@ export default function AdminPrintPage() {
     return () => {
       document.title = previousTitle;
     };
+  }, []);
+
+  useEffect(() => {
+    setBackShiftMm(readStoredBackShift());
   }, []);
 
   useEffect(() => {
@@ -347,6 +465,80 @@ export default function AdminPrintPage() {
 
   const sheetPairs = frontPages.length;
 
+  function nudgeBackShift(delta: number) {
+    setBackShiftMm((current) => {
+      const next = clampAdminBackShiftMm(current + delta);
+      storeBackShift(next);
+      return next;
+    });
+  }
+
+  async function onPrintSheets(mode: AdminPrintMode) {
+    const printWindow = window.open("", "_blank");
+    setPrintBusy(mode);
+    setPrintNote(null);
+    try {
+      const sheets = [...document.querySelectorAll<HTMLElement>(".admin-sheet")];
+      if (sheets.length === 0) {
+        printWindow?.close();
+        setPrintNote({ error: false, text: "Select at least one card to print." });
+        return;
+      }
+      const pages: AdminPdfPage[] = [];
+      for (const sheet of sheets) {
+        const label = sheet.querySelector(".admin-sheet-label")?.textContent?.trim() ?? "";
+        const side = sheet.dataset.adminSheet === "back" ? "back" : "front";
+        const extraBack = mode === "extra-back" && side === "back";
+        const images: (string | null)[] = [];
+        const frameColors: ([number, number, number] | null)[] = [];
+        for (const slot of sheet.querySelectorAll<HTMLElement>(".admin-print-slot")) {
+          const face = slot.querySelector<HTMLElement>(".card-front, .card-back");
+          if (!face) {
+            images.push(null);
+            frameColors.push(null);
+            continue;
+          }
+          const png = await rasterizeCard(face, extraBack ? { corners: "square" } : undefined);
+          images.push(await jpegForPrint(png));
+          frameColors.push(extraBack ? await sampleFrameColor(png) : null);
+        }
+        pages.push({
+          label,
+          side,
+          images,
+          frameColors: extraBack ? frameColors : undefined,
+        });
+      }
+      const doc = buildAdminSheetPdf(pages, mode, { backShiftMm });
+      doc.autoPrint();
+      const url = String(doc.output("bloburl"));
+      const filename =
+        mode === "extra-back" ? "dana-friends-sheets-extra-back.pdf" : "dana-friends-sheets.pdf";
+      if (printWindow) {
+        printWindow.location.href = url;
+      } else {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setPrintNote({
+          error: false,
+          text: `Pop-up blocked. Downloaded ${filename}. Print that file at 100% / actual size.`,
+        });
+      }
+    } catch (err) {
+      printWindow?.close();
+      setPrintNote({
+        error: true,
+        text: err instanceof Error ? err.message : "Could not build the print PDF.",
+      });
+    } finally {
+      setPrintBusy(null);
+    }
+  }
+
   return (
     <main className="admin-root">
       <div className="admin-chrome mx-auto w-full max-w-3xl px-4 pb-6 pt-6">
@@ -361,8 +553,14 @@ export default function AdminPrintPage() {
             </a>
           </div>
           <p className="mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-black/70">
-            Choose cards saved in this browser. Each A4 page holds 9 sleeves at
-            63.5 × 88.9 mm. In the print dialog, choose 100% / actual size.
+            Choose cards saved in this browser, then pick a print mode. Both
+            open an A4 PDF. In the print dialog, choose 100% / actual size.
+          </p>
+          <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-black/70">
+            Exact prints the front and the back at 63.5 × 88.9 mm, rounded, on
+            the same centers. Extra back keeps that front as the cut line.
+            Each back’s picture stays that size, with about 4 mm of that
+            card’s own background around it.
           </p>
           <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-black/70">
             Print the front page, flip the paper on the long edge, then print
@@ -435,15 +633,66 @@ export default function AdminPrintPage() {
                 }}
               />
             </label>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              disabled={selectedCards.length === 0}
-              data-admin-print="1"
-              className="ml-auto rounded-full bg-black px-4 py-2 text-sm font-extrabold text-[#FFE56A] disabled:opacity-40"
-            >
-              Print sheets
-            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void onPrintSheets("exact")}
+                disabled={printBusy !== null || selectedCards.length === 0}
+                data-admin-print="exact"
+                className="rounded-full border border-black bg-white px-4 py-2 text-sm font-extrabold disabled:opacity-40"
+              >
+                {printBusy === "exact" ? "Preparing PDF…" : "Exact"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void onPrintSheets("extra-back")}
+                disabled={printBusy !== null || selectedCards.length === 0}
+                data-admin-print="extra-back"
+                className="rounded-full bg-black px-4 py-2 text-sm font-extrabold text-[#FFE56A] disabled:opacity-40"
+              >
+                {printBusy === "extra-back" ? "Preparing PDF…" : "Extra back"}
+              </button>
+            </div>
+          </div>
+          <div
+            className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1"
+            data-admin-back-shift="1"
+          >
+            <span className="text-xs font-extrabold uppercase tracking-wide text-black/70">
+              Back shift
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Move the back page left by 1 mm"
+                data-back-shift="left"
+                disabled={backShiftMm <= ADMIN_BACK_SHIFT_MIN_MM}
+                onClick={() => nudgeBackShift(-1)}
+                className="h-8 w-8 rounded-full border border-black/15 bg-white text-base font-extrabold leading-none disabled:opacity-40"
+              >
+                −
+              </button>
+              <span
+                className="min-w-16 text-center text-sm font-extrabold tabular-nums"
+                data-back-shift-mm={backShiftMm}
+              >
+                {formatBackShift(backShiftMm)}
+              </span>
+              <button
+                type="button"
+                aria-label="Move the back page right by 1 mm"
+                data-back-shift="right"
+                disabled={backShiftMm >= ADMIN_BACK_SHIFT_MAX_MM}
+                onClick={() => nudgeBackShift(1)}
+                className="h-8 w-8 rounded-full border border-black/15 bg-white text-base font-extrabold leading-none disabled:opacity-40"
+              >
+                +
+              </button>
+            </div>
+            <p className="text-xs font-semibold leading-relaxed text-black/60">
+              Positive moves the back page to the right. After a test print, if
+              the back sits too far left, tap +. The front page stays put.
+            </p>
           </div>
           {zipNote ? (
             <p
@@ -461,6 +710,15 @@ export default function AdminPrintPage() {
               role="status"
             >
               {deleteNote.text}
+            </p>
+          ) : null}
+          {printNote ? (
+            <p
+              className={`mt-3 text-sm font-semibold ${printNote.error ? "text-red-800" : "text-black/70"}`}
+              data-print-message="1"
+              role="status"
+            >
+              {printNote.text}
             </p>
           ) : null}
           {orderNote ? (
@@ -595,6 +853,14 @@ export default function AdminPrintPage() {
           </p>
         ) : null}
       </div>
+
+      <p className="admin-print-hint">
+        Use Exact or Extra back. Both open an A4 PDF. Exact keeps every sleeve
+        at 63.5 × 88.9 mm. Extra back keeps the fronts and the back pictures
+        at that size, and paints about 4 mm of each back’s own background
+        past the cut. Print at 100% / actual size, flip on the long edge, then
+        print the back page.
+      </p>
 
       {frontPages.length > 0 ? (
         <div className="admin-sheets">

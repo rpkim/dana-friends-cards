@@ -592,6 +592,10 @@ html.exporting-card [data-card-chrome],
   height: 560px !important;
 }
 
+.admin-print-hint {
+  display: none;
+}
+
 @media screen {
   .admin-sheets {
     display: flex;
@@ -615,31 +619,37 @@ html.exporting-card [data-card-chrome],
 }
 
 @media print {
-  /*
-   * Pin the sheet to A4. Chrome's macOS print dialog still lays the document
-   * out in the window (about 900px wide) and then fits that window onto A4,
-   * which shrinks a 63.5 mm card to about 55.8 mm. zoom is 1 when 100vw is
-   * already 210 mm, and window/A4 otherwise, so the fit lands back on the sleeve.
-   */
+  /* The Print sheets button opens a PDF. This page is only the preview. */
   html:has(.admin-root),
   body:has(.admin-root) {
-    width: 210mm !important;
-    max-width: 210mm !important;
+    width: auto !important;
+    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
     min-height: 0 !important;
     height: auto !important;
     background: #fff !important;
     background-attachment: scroll !important;
-  }
-
-  html:has(.admin-root) {
-    zoom: calc(100vw / 210mm);
+    zoom: 1 !important;
   }
 
   .admin-chrome,
+  .admin-sheets,
   body:has(.admin-root) nextjs-portal {
     display: none !important;
+  }
+
+  /*
+   * Card positions are drawn in the PDF, not in this page. A browser print of
+   * the preview would let Chrome fit each page to the window on its own.
+   */
+  .admin-print-hint {
+    display: block !important;
+    margin: 16mm;
+    color: #111;
+    font-family: var(--font-body), "Nunito", sans-serif;
+    font-size: 12pt;
+    font-weight: 700;
   }
 
   .admin-root,

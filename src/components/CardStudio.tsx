@@ -22,14 +22,16 @@ import {
   type CaptionPreset,
 } from "@/lib/captions";
 import {
+  canShareImageFile,
   downloadDataUrl,
   downloadPdfFromPngs,
+  downloadPngFile,
   pngFileFromDataUrl,
   printDataUrls,
   rasterizeCard,
   rasterizeInstagramPost,
+  shouldSharePngFile,
   stitchPngsSideBySide,
-  canShareImageFile,
 } from "@/lib/exportCard";
 import {
   deleteSavedCard,
@@ -432,8 +434,11 @@ export function CardStudio({
   const refineLock = useRef(false);
   const saveResultsBtnRef = useRef<HTMLButtonElement>(null);
   const instagramRef = useRef<HTMLDivElement>(null);
+  const instagramFileRef = useRef<File | null>(null);
   const [instagramError, setInstagramError] = useState<string | null>(null);
-  const [instagramShare, setInstagramShare] = useState<File | null>(null);
+  const [instagramFile, setInstagramFile] = useState<File | null>(null);
+  const [instagramPreparing, setInstagramPreparing] = useState(false);
+  const [instagramAttempt, setInstagramAttempt] = useState(0);
   /** Fields last written for the active library card. Null until a card exists. */
   const [savedSnapshot, setSavedSnapshot] = useState<EditableSnapshot | null>(null);
 
@@ -463,13 +468,75 @@ export function CardStudio({
   useEffect(() => {
     if (!saveResultsOpen) {
       setPhotoShare(null);
-      setInstagramShare(null);
-      setInstagramError(null);
       return;
     }
     setCanSaveToPhotos(canShareImageFile());
-    setInstagramError(null);
   }, [saveResultsOpen]);
+
+  useEffect(() => {
+    if (!saveResultsOpen) {
+      instagramFileRef.current = null;
+      setInstagramFile(null);
+      setInstagramPreparing(false);
+      setInstagramError(null);
+      return;
+    }
+    let cancelled = false;
+    instagramFileRef.current = null;
+    setInstagramFile(null);
+    setInstagramPreparing(true);
+    setInstagramError(null);
+
+    function waitForInstagramNode() {
+      return new Promise<HTMLElement>((resolve, reject) => {
+        let frames = 0;
+        const look = () => {
+          if (cancelled) {
+            reject(new Error("The birthday post is not ready yet."));
+            return;
+          }
+          const node = instagramRef.current;
+          if (node instanceof HTMLElement) {
+            resolve(node);
+            return;
+          }
+          frames += 1;
+          if (frames > 30) {
+            reject(new Error("The birthday post is not ready yet."));
+            return;
+          }
+          requestAnimationFrame(look);
+        };
+        look();
+      });
+    }
+
+    (async () => {
+      const node = await waitForInstagramNode();
+      if (cancelled) return;
+      const png = await rasterizeInstagramPost(node);
+      if (cancelled) return;
+      const file = pngFileFromDataUrl(png, "dana-7th-birthday.png");
+      if (file.type !== "image/png") {
+        throw new Error("Expected a PNG.");
+      }
+      instagramFileRef.current = file;
+      setInstagramFile(file);
+      setInstagramPreparing(false);
+    })().catch((err: unknown) => {
+      if (cancelled) return;
+      instagramFileRef.current = null;
+      setInstagramFile(null);
+      setInstagramPreparing(false);
+      const message =
+        err instanceof Error ? err.message : "Could not prepare the Instagram image.";
+      setInstagramError(message);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [saveResultsOpen, data, portraitUrl, instagramAttempt]);
 
   useEffect(() => {
     return () => {
@@ -1113,48 +1180,33 @@ export function CardStudio({
     }
   }
 
-  async function saveInstagram() {
-    setBusy(true);
-    setInstagramError(null);
-    setInstagramShare(null);
-    try {
-      const node = instagramRef.current;
-      if (!(node instanceof HTMLElement)) {
-        throw new Error("The birthday post is not ready yet.");
-      }
-      const png = await rasterizeInstagramPost(node);
-      downloadDataUrl(png, "dana-7th-birthday.png");
-      if (canSaveToPhotos) {
-        setInstagramShare(pngFileFromDataUrl(png, "dana-7th-birthday.png"));
-      }
-      setStatus({
-        kind: "success",
-        en: canSaveToPhotos
-          ? "Saved dana-7th-birthday.png. Tap Save to photos to add it to your gallery."
-          : "Saved dana-7th-birthday.png, a 1080 × 1080 birthday square.",
-      });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not save the Instagram image.";
-      setInstagramError(message);
-      setStatus({ kind: "error", en: message });
-    } finally {
-      setBusy(false);
+  function saveInstagram() {
+    const file = instagramFileRef.current;
+    if (!file) return;
+    // iOS drops the user gesture if anything is awaited before share.
+    if (shouldSharePngFile(file)) {
+      navigator
+        .share({ files: [file], title: file.name })
+        .then(() => {
+          setStatus({
+            kind: "success",
+            en: "Opened the share sheet for dana-7th-birthday.png.",
+          });
+        })
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          const message =
+            err instanceof Error ? err.message : "Could not open the share sheet.";
+          setInstagramError(message);
+          setStatus({ kind: "error", en: message });
+        });
+      return;
     }
-  }
-
-  async function shareInstagramPhoto() {
-    const file = instagramShare;
-    if (!file || typeof navigator.share !== "function") return;
-    try {
-      await navigator.share({ files: [file], title: file.name });
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      const message =
-        err instanceof Error ? err.message : "Could not open the share sheet.";
-      setInstagramError(message);
-      setStatus({ kind: "error", en: message });
-    }
+    downloadPngFile(file);
+    setStatus({
+      kind: "success",
+      en: "Saved dana-7th-birthday.png, a 1080 × 1080 birthday square.",
+    });
   }
 
   async function saveFieldChanges() {
@@ -1734,9 +1786,10 @@ export function CardStudio({
             onSharePhoto={() => void sharePreparedPhoto()}
             onPrint={(kind) => void handlePrint(kind)}
             onSavePdf={(kind) => void savePdf(kind)}
-            onSaveInstagram={() => void saveInstagram()}
-            onShareInstagram={() => void shareInstagramPhoto()}
-            instagramShareReady={!!instagramShare}
+            onSaveInstagram={saveInstagram}
+            onRetryInstagram={() => setInstagramAttempt((n) => n + 1)}
+            instagramPreparing={instagramPreparing}
+            instagramReady={instagramFile !== null}
             instagramError={instagramError}
           />
           <div
@@ -1852,8 +1905,9 @@ function PairExportBar({
   onPrint,
   onSavePdf,
   onSaveInstagram,
-  onShareInstagram,
-  instagramShareReady,
+  onRetryInstagram,
+  instagramPreparing,
+  instagramReady,
   instagramError,
 }: {
   busy: boolean;
@@ -1865,8 +1919,9 @@ function PairExportBar({
   onPrint: (kind: "front" | "both") => void;
   onSavePdf: (kind: "front" | "both") => void;
   onSaveInstagram: () => void;
-  onShareInstagram: () => void;
-  instagramShareReady: boolean;
+  onRetryInstagram: () => void;
+  instagramPreparing: boolean;
+  instagramReady: boolean;
   instagramError: string | null;
 }) {
   return (
@@ -1926,31 +1981,34 @@ function PairExportBar({
       <ExportRow title="Save for Instagram">
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || instagramPreparing || !instagramReady}
           onClick={onSaveInstagram}
           className="w-full rounded-xl border-2 border-black bg-[#FF7AB8] px-3 py-2.5 text-sm font-bold disabled:opacity-50"
           data-action="save-instagram"
+          data-instagram-state={
+            instagramPreparing ? "preparing" : instagramReady ? "ready" : "waiting"
+          }
         >
-          Save for Instagram
+          {instagramPreparing ? "Preparing…" : "Save for Instagram"}
         </button>
         <p className="text-[11px] font-medium text-black/55">
-          Square 1080 × 1080 birthday post with this card’s front inside.
+          Square 1080 × 1080 birthday post with this card’s front inside. On a
+          phone, this opens the share sheet so you can save it to photos.
         </p>
-        {canSaveToPhotos && instagramShareReady ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onShareInstagram}
-            className="w-full rounded-xl bg-[#2F6BFF] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-            data-action="save-instagram-photos"
-          >
-            Save to photos
-          </button>
-        ) : null}
         {instagramError ? (
           <p role="alert" className="text-xs font-bold text-red-700" data-instagram-error="1">
             {instagramError}
           </p>
+        ) : null}
+        {instagramError && !instagramPreparing ? (
+          <button
+            type="button"
+            onClick={onRetryInstagram}
+            className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-bold"
+            data-action="retry-instagram"
+          >
+            Try again
+          </button>
         ) : null}
       </ExportRow>
     </div>

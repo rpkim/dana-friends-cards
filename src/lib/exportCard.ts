@@ -6,11 +6,27 @@ import { jsPDF } from "jspdf";
 const CARD_RATIO = 88.9 / 63.5;
 
 /**
+ * Extra-back prints a squared sleeve. The live card is clipped to a rounded
+ * rect, and that clip is what leaves white paper at the corners.
+ */
+function squareCardEdges(card: HTMLElement) {
+  card.style.setProperty("border-radius", "0", "important");
+  card.style.setProperty("overflow", "hidden", "important");
+  card.querySelectorAll<HTMLElement>(".card-scale").forEach((el) => {
+    el.style.setProperty("border-radius", "0", "important");
+    el.style.setProperty("overflow", "hidden", "important");
+  });
+}
+
+/**
  * html-to-image clones the card into an SVG foreignObject, which drops
  * aspect-ratio and collapses flex-1. Lay the card out in the real document
  * at an explicit 63:88.9 box and pin each band to a pixel height first.
  */
-export async function rasterizeCard(node: HTMLElement): Promise<string> {
+export async function rasterizeCard(
+  node: HTMLElement,
+  options?: { corners?: "round" | "square" },
+): Promise<string> {
   // Preview type is sized for a ~400px card. The 63.5mm export box is
   // narrower, so the same px type overflows and the art collapses.
   const width = Math.max(Math.round(node.getBoundingClientRect().width), 420);
@@ -55,6 +71,7 @@ export async function rasterizeCard(node: HTMLElement): Promise<string> {
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
     pinCardBands(clone, height);
+    if (options?.corners === "square") squareCardEdges(clone);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     return await nodeToPng(clone, { pixelRatio: 3 });
   } finally {
@@ -69,6 +86,11 @@ export const INSTAGRAM_SQUARE_PX = 1080;
  * Capture a birthday post that already contains the live card front.
  * The square is placed in the document at 1080×1080 first, and the front is
  * pinned to pixel bands, so the foreignObject clone cannot collapse it.
+ *
+ * iOS Safari paints the CSS birthday background through that foreignObject
+ * and drops the portrait `<img>` (data URLs, blob URLs, and inlined card
+ * art). The portrait is decoded first, then drawn into the art window with
+ * canvas so the file matches the live card.
  */
 export async function rasterizeInstagramPost(node: HTMLElement): Promise<string> {
   const size = INSTAGRAM_SQUARE_PX;
@@ -81,7 +103,8 @@ export async function rasterizeInstagramPost(node: HTMLElement): Promise<string>
     "top:0",
     `width:${size}px`,
     `height:${size}px`,
-    "z-index:2147483646",
+    "opacity:0",
+    "z-index:1",
     "background:#ffffff",
     "pointer-events:none",
     "overflow:hidden",
@@ -99,6 +122,7 @@ export async function rasterizeInstagramPost(node: HTMLElement): Promise<string>
   clone.style.left = "0";
   clone.style.top = "0";
   clone.style.flex = "none";
+  clone.style.opacity = "1";
   host.appendChild(clone);
   document.body.appendChild(host);
   try {
@@ -130,20 +154,296 @@ export async function rasterizeInstagramPost(node: HTMLElement): Promise<string>
     });
     pinCardBands(card, cardH);
     await new Promise((resolve) => requestAnimationFrame(resolve));
+    await decodeCardImages(clone);
+    const portraits = measurePortraitStamps(clone, size);
+    if (!portraits.length) {
+      throw new Error("The portrait is not on the birthday post.");
+    }
     const png = await nodeToPng(clone, {
       pixelRatio: 1,
       width: size,
       height: size,
     });
-    const pixels = pngPixelSize(png);
+    const composed = await paintPortraitsOnPng(png, portraits, size);
+    const pixels = pngPixelSize(composed);
     if (pixels.width !== size || pixels.height !== size) {
       throw new Error(
         `The Instagram image was ${pixels.width}×${pixels.height}, not ${size}×${size}.`,
       );
     }
-    return png;
+    return composed;
   } finally {
     host.remove();
+  }
+}
+
+type PortraitStamp = {
+  image: HTMLImageElement;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  posX: number;
+  posY: number;
+  clip: { x: number; y: number; w: number; h: number; radius: number };
+  overlays: { x: number; y: number; w: number; h: number }[];
+};
+
+/** Inline blob and network images, then wait until each one has pixels. */
+async function decodeCardImages(root: HTMLElement) {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      const portrait = img.classList.contains("card-art-image");
+      const src = img.currentSrc || img.src;
+      if (!src) {
+        if (portrait) throw new Error("The portrait image has no source.");
+        return;
+      }
+      if (!src.startsWith("data:")) {
+        const dataUrl = await fetchAsDataUrl(src);
+        img.removeAttribute("srcset");
+        img.decoding = "sync";
+        img.loading = "eager";
+        img.src = dataUrl;
+      }
+      if (typeof img.decode === "function") {
+        await img.decode().catch(() => undefined);
+      }
+      if (!img.complete || img.naturalWidth === 0) {
+        await new Promise<void>((resolve, reject) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          if (img.complete) {
+            reject(new Error("The portrait image did not decode."));
+            return;
+          }
+          img.addEventListener("load", () => resolve(), { once: true });
+          img.addEventListener(
+            "error",
+            () => reject(new Error("The card image failed to load.")),
+            { once: true },
+          );
+        });
+      }
+      if (portrait && img.naturalWidth === 0) {
+        throw new Error("The portrait image did not decode.");
+      }
+    }),
+  );
+}
+
+async function fetchAsDataUrl(url: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    throw new Error("The card image could not be loaded.");
+  }
+  if (!res.ok) {
+    throw new Error(`The card image could not be loaded (HTTP ${res.status}).`);
+  }
+  const blob = await res.blob();
+  if (!blob.size) throw new Error("The card image is empty.");
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("The card image could not be read."));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:")) {
+        reject(new Error("The card image could not be read."));
+        return;
+      }
+      resolve(result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function measurePortraitStamps(root: HTMLElement, size: number): PortraitStamp[] {
+  const rootRect = root.getBoundingClientRect();
+  if (rootRect.width < 100 || rootRect.height < 100) {
+    throw new Error("The birthday post is not laid out yet.");
+  }
+  const scaleX = size / rootRect.width;
+  const scaleY = size / rootRect.height;
+  const box = (el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      x: (rect.left - rootRect.left) * scaleX,
+      y: (rect.top - rootRect.top) * scaleY,
+      w: rect.width * scaleX,
+      h: rect.height * scaleY,
+    };
+  };
+  return Array.from(root.querySelectorAll<HTMLImageElement>(".card-art-image")).map(
+    (img) => {
+      const frame = img.closest<HTMLElement>(".card-art-frame");
+      const dest = box(img);
+      if (dest.w < 80 || dest.h < 80) {
+        throw new Error("The portrait frame is not laid out yet.");
+      }
+      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+        throw new Error("The portrait image did not decode.");
+      }
+      const position = parseObjectPosition(getComputedStyle(img).objectPosition);
+      const clip = frame ? frameClip(frame, rootRect, scaleX, scaleY) : { ...dest, radius: 0 };
+      const overlays = frame
+        ? Array.from(frame.querySelectorAll<HTMLElement>("[data-card-chrome]"))
+            .map(box)
+            .filter((rect) => rect.w >= 2 && rect.h >= 2)
+        : [];
+      img.style.width = `${Math.round(dest.w / scaleX)}px`;
+      img.style.height = `${Math.round(dest.h / scaleY)}px`;
+      img.style.objectFit = "cover";
+      return {
+        image: img,
+        x: dest.x,
+        y: dest.y,
+        w: dest.w,
+        h: dest.h,
+        posX: position.x,
+        posY: position.y,
+        clip,
+        overlays,
+      };
+    },
+  );
+}
+
+function frameClip(
+  frame: HTMLElement,
+  rootRect: DOMRect,
+  scaleX: number,
+  scaleY: number,
+) {
+  const rect = frame.getBoundingClientRect();
+  const style = getComputedStyle(frame);
+  const border = parseFloat(style.borderTopWidth) || 0;
+  const radius = parseFloat(style.borderTopLeftRadius) || 0;
+  return {
+    x: (rect.left - rootRect.left + border) * scaleX,
+    y: (rect.top - rootRect.top + border) * scaleY,
+    w: Math.max(1, (rect.width - border * 2) * scaleX),
+    h: Math.max(1, (rect.height - border * 2) * scaleY),
+    radius: Math.max(0, radius - border) * ((scaleX + scaleY) / 2),
+  };
+}
+
+function parseObjectPosition(value: string) {
+  const parts = value.trim().split(/\s+/);
+  return {
+    x: parsePositionToken(parts[0] ?? "50%", 0.5),
+    y: parsePositionToken(parts[1] ?? "50%", 0.5),
+  };
+}
+
+function parsePositionToken(token: string, fallback: number) {
+  if (token === "center") return 0.5;
+  if (token === "left" || token === "top") return 0;
+  if (token === "right" || token === "bottom") return 1;
+  if (token.endsWith("%")) {
+    const n = Number(token.slice(0, -1));
+    return Number.isFinite(n) ? n / 100 : fallback;
+  }
+  return fallback;
+}
+
+/**
+ * Draw each decoded portrait into the art window. Badge chrome is copied
+ * back from the html-to-image pass so age and motif stay on top of the face.
+ */
+async function paintPortraitsOnPng(
+  png: string,
+  stamps: PortraitStamp[],
+  size: number,
+) {
+  const chrome = await loadImage(png);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create the Instagram image.");
+  ctx.drawImage(chrome, 0, 0, size, size);
+  for (const stamp of stamps) {
+    ctx.save();
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function" && stamp.clip.radius > 0) {
+      ctx.roundRect(stamp.clip.x, stamp.clip.y, stamp.clip.w, stamp.clip.h, stamp.clip.radius);
+    } else {
+      ctx.rect(stamp.x, stamp.y, stamp.w, stamp.h);
+    }
+    ctx.clip();
+    drawImageCover(ctx, stamp.image, stamp.x, stamp.y, stamp.w, stamp.h, stamp.posX, stamp.posY);
+    ctx.restore();
+    assertPortraitVisible(ctx, stamp);
+    for (const overlay of stamp.overlays) {
+      ctx.drawImage(
+        chrome,
+        overlay.x,
+        overlay.y,
+        overlay.w,
+        overlay.h,
+        overlay.x,
+        overlay.y,
+        overlay.w,
+        overlay.h,
+      );
+    }
+  }
+  return canvas.toDataURL("image/png");
+}
+
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number,
+  posX: number,
+  posY: number,
+) {
+  const sw = image.naturalWidth;
+  const sh = image.naturalHeight;
+  if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {
+    throw new Error("The portrait image did not decode.");
+  }
+  const scale = Math.max(dw / sw, dh / sh);
+  const cropW = dw / scale;
+  const cropH = dh / scale;
+  const sx = Math.max(0, Math.min(sw - cropW, (sw - cropW) * posX));
+  const sy = Math.max(0, Math.min(sh - cropH, (sh - cropH) * posY));
+  ctx.drawImage(image, sx, sy, cropW, cropH, dx, dy, dw, dh);
+}
+
+/** Fail the export when the art window does not match the decoded portrait. */
+function assertPortraitVisible(ctx: CanvasRenderingContext2D, stamp: PortraitStamp) {
+  const x = Math.max(0, Math.round(stamp.x));
+  const y = Math.max(0, Math.round(stamp.y));
+  const w = Math.max(1, Math.min(ctx.canvas.width - x, Math.round(stamp.w)));
+  const h = Math.max(1, Math.min(ctx.canvas.height - y, Math.round(stamp.h)));
+  const ref = document.createElement("canvas");
+  ref.width = w;
+  ref.height = h;
+  const refCtx = ref.getContext("2d");
+  if (!refCtx) return;
+  drawImageCover(refCtx, stamp.image, 0, 0, w, h, stamp.posX, stamp.posY);
+  const actual = ctx.getImageData(x, y, w, h).data;
+  const expected = refCtx.getImageData(0, 0, w, h).data;
+  let drift = 0;
+  let count = 0;
+  for (let i = 0; i < expected.length; i += 64) {
+    drift +=
+      Math.abs(expected[i]! - actual[i]!) +
+      Math.abs(expected[i + 1]! - actual[i + 1]!) +
+      Math.abs(expected[i + 2]! - actual[i + 2]!);
+    count += 1;
+  }
+  if (count > 0 && drift / count > 24) {
+    throw new Error("The portrait did not appear in the Instagram image.");
   }
 }
 
@@ -242,19 +542,7 @@ export async function nodeToPng(
   },
 ): Promise<string> {
   await document.fonts.ready.catch(() => undefined);
-  // Ensure images inside the node have loaded
-  const imgs = Array.from(node.querySelectorAll("img"));
-  await Promise.all(
-    imgs.map(
-      (img) =>
-        img.complete
-          ? Promise.resolve()
-          : new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-            }),
-    ),
-  );
+  await waitForDecodedImages(node);
 
   const backgroundColor = options?.backgroundColor ?? "#ffffff";
   const width = options?.width ?? Math.ceil(node.offsetWidth);
@@ -294,6 +582,58 @@ export function downloadDataUrl(dataUrl: string, filename: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/** Synchronous download. Safe to call from a click handler before any await. */
+export function downloadPngFile(file: File) {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/**
+ * Phones that can hand this PNG to the system share sheet.
+ * Desktop pointer stays on a normal download. A canShare rejection falls back too.
+ */
+export function shouldSharePngFile(file: File): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  if (file.type !== "image/png") return false;
+  if (typeof navigator.share !== "function" || typeof navigator.canShare !== "function") {
+    return false;
+  }
+  const phone =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  if (!phone) return false;
+  try {
+    return navigator.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+async function waitForDecodedImages(node: HTMLElement) {
+  const imgs = Array.from(node.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      if (img.loading === "lazy") img.loading = "eager";
+      if (!img.complete) {
+        await new Promise<void>((resolve) => {
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+        });
+      }
+      if (typeof img.decode === "function") {
+        await img.decode().catch(() => undefined);
+      }
+    }),
+  );
 }
 
 /** PNG File for the system share sheet. The caller taps share after this exists. */
